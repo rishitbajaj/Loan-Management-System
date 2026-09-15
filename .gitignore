@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Builds
+backend/dist/
+frontend/.next/
+frontend/out/
+*.tsbuildinfo
+
+# Uploaded salary slips - never commit user documents
+backend/uploads/
+
+# Logs / OS
+npm-debug.log*
+*.log
+.DS_Store
+Thumbs.db
