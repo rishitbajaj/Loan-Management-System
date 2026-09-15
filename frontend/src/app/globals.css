@@ -1,0 +1,13 @@
+@import "tailwindcss";
+
+@theme inline {
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+body {
+  font-family: var(--font-sans);
+}
+
+input[type="range"] {
+  accent-color: #4f46e5;
+}
