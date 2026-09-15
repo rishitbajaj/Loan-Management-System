@@ -129,6 +129,8 @@ export async function getLoanForUser(loanId: string, user: AuthUser): Promise<Lo
   if (user.role === 'borrower') {
     const ownerId = loan.populated('borrower') ? String((loan.borrower as unknown as { _id: unknown })._id) : String(loan.borrower);
     if (ownerId !== user.id) throw AppError.forbidden('You can only view your own loans');
+  } else if (user.role === 'sales') {
+    throw AppError.forbidden('Sales cannot access loan records');
   }
   return loan;
 }

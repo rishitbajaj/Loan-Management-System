@@ -12,7 +12,7 @@ loanRouter.use(authenticate);
 
 loanRouter.post('/', requireRole('borrower'), controller.create);
 loanRouter.get('/me', requireRole('borrower'), controller.listMine);
-loanRouter.get('/:id', controller.getById);
+loanRouter.get('/:id', requireRole('borrower', 'sanction', 'disbursement', 'collection', 'admin'), controller.getById);
 
 loanRouter.patch('/:id/sanction', requireRole('sanction', 'admin'), controller.sanction);
 loanRouter.patch('/:id/reject', requireRole('sanction', 'admin'), controller.reject);
