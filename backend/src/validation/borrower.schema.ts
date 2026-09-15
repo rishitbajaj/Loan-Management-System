@@ -3,7 +3,7 @@ import { EMPLOYMENT_MODES } from '../types';
 
 export const profileSchema = z.object({
   fullName: z.string().trim().min(2, 'Full name must be at least 2 characters').max(100),
-  pan: z.string().trim().toUpperCase().length(10, 'PAN must be exactly 10 characters'),
+  pan: z.string().trim().toUpperCase().min(1, 'PAN is required'),
   dob: z.coerce.date({ error: 'Enter a valid date of birth' }).refine((d) => d.getTime() < Date.now(), {
     message: 'Date of birth must be in the past',
   }),
