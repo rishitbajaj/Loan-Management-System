@@ -1,11 +1,96 @@
+import { Types } from 'mongoose';
 import { Loan, type LoanDocument } from '../models/Loan';
 import { User } from '../models/User';
-import { ACTIVE_LOAN_STATUSES, type AuthUser } from '../types';
+import { ACTIVE_LOAN_STATUSES, type AuthUser, type LoanStatus, type Role } from '../types';
 import { AppError } from '../utils/AppError';
 import { calculateLoan } from '../utils/loanMath';
 import type { LoanTermsInput } from '../validation/loan.schema';
 
 export const BORROWER_FIELDS = 'name email profile.fullName profile.pan profile.monthlySalary profile.employmentMode profile.breStatus';
+
+const TRANSITIONS: Record<LoanStatus, Partial<Record<LoanStatus, Role[]>>> = {
+  applied: { sanctioned: ['sanction', 'admin'], rejected: ['sanction', 'admin'] },
+  sanctioned: { disbursed: ['disbursement', 'admin'] },
+  disbursed: { closed: ['collection', 'admin'] },
+  rejected: {},
+  closed: {},
+};
+
+export function canTransition(from: LoanStatus, to: LoanStatus, role: Role): boolean {
+  return TRANSITIONS[from][to]?.includes(role) ?? false;
+}
+
+export function transition(loan: LoanDocument, to: LoanStatus, actor: AuthUser, note?: string): LoanDocument {
+  const from = loan.status;
+  const allowedRoles = TRANSITIONS[from][to];
+
+  if (!allowedRoles) {
+    throw AppError.conflict(`Cannot move a loan from "${from}" to "${to}"`);
+  }
+  if (!allowedRoles.includes(actor.role)) {
+    throw AppError.forbidden(`Role "${actor.role}" cannot move a loan from "${from}" to "${to}"`);
+  }
+  if (to === 'rejected' && !note) {
+    throw AppError.validation('A rejection reason is required', [{ field: 'reason', message: 'Rejection reason is required' }]);
+  }
+
+  const actorId = new Types.ObjectId(actor.id);
+  const now = new Date();
+
+  switch (to) {
+    case 'sanctioned':
+      loan.sanctionedBy = actorId;
+      loan.sanctionedAt = now;
+      break;
+    case 'rejected':
+      loan.rejectionReason = note;
+      break;
+    case 'disbursed':
+      loan.disbursedBy = actorId;
+      loan.disbursedAt = now;
+      break;
+    case 'closed':
+      loan.closedAt = now;
+      break;
+  }
+
+  loan.status = to;
+  loan.statusHistory.push({ from, to, by: actorId, at: now, note });
+  return loan;
+}
+
+async function findLoanOrFail(loanId: string): Promise<LoanDocument> {
+  const loan = await Loan.findById(loanId);
+  if (!loan) throw AppError.notFound('Loan not found');
+  return loan;
+}
+
+export async function sanctionLoan(loanId: string, actor: AuthUser): Promise<LoanDocument> {
+  const loan = await findLoanOrFail(loanId);
+  transition(loan, 'sanctioned', actor, 'Loan approved');
+  await loan.save();
+  return loan.populate('borrower', BORROWER_FIELDS);
+}
+
+export async function rejectLoan(loanId: string, actor: AuthUser, reason: string): Promise<LoanDocument> {
+  const loan = await findLoanOrFail(loanId);
+  transition(loan, 'rejected', actor, reason);
+  await loan.save();
+  return loan.populate('borrower', BORROWER_FIELDS);
+}
+
+export async function disburseLoan(loanId: string, actor: AuthUser): Promise<LoanDocument> {
+  const loan = await findLoanOrFail(loanId);
+  transition(loan, 'disbursed', actor, 'Loan disbursed');
+  await loan.save();
+  return loan.populate('borrower', BORROWER_FIELDS);
+}
+
+export async function listLoansByStatus(statuses: LoanStatus[]): Promise<LoanDocument[]> {
+  return Loan.find({ status: { $in: statuses } })
+    .populate('borrower', BORROWER_FIELDS)
+    .sort({ updatedAt: -1 });
+}
 
 export async function createLoan(borrower: AuthUser, terms: LoanTermsInput): Promise<LoanDocument> {
   const user = await User.findById(borrower.id);
