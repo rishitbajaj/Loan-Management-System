@@ -1,10 +1,9 @@
 'use client';
 
-import { Card } from '@/components/ui/Card';
-import { Alert } from '@/components/ui/Card';
+import { ErrorState, PageHeader } from '@/components/ui/Card';
 import { PageLoader } from '@/components/ui/Spinner';
 import { api, errorMessage } from '@/lib/api';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 
 export function useDashboardQuery<T>(path: string) {
   const [data, setData] = useState<T | null>(null);
@@ -30,11 +29,30 @@ export function useDashboardQuery<T>(path: string) {
   return { data, error, loading, refresh };
 }
 
-export function ModuleFrame({ title, description, loading, error, children }: { title: string; description: string; loading: boolean; error: string | null; children: React.ReactNode }) {
+export function ModuleFrame({
+  title,
+  description,
+  loading,
+  error,
+  onRetry,
+  children,
+}: {
+  title: string;
+  description: string;
+  loading: boolean;
+  error: string | null;
+  onRetry?: () => void;
+  children: ReactNode;
+}) {
   return (
-    <Card title={title} description={description}>
-      {error && <Alert kind="error">{error}</Alert>}
+    <div>
+      <PageHeader title={title} description={description} />
+      {error && (
+        <div className="mb-4">
+          <ErrorState message={error} onRetry={onRetry} />
+        </div>
+      )}
       {loading ? <PageLoader /> : children}
-    </Card>
+    </div>
   );
 }
