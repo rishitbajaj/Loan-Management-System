@@ -57,8 +57,13 @@ export async function register(input: RegisterInput): Promise<{ user: UserDocume
 
 export async function login(input: LoginInput): Promise<{ user: UserDocument; token: string }> {
   const user = await User.findOne({ email: input.email });
-  const valid = user ? await bcrypt.compare(input.password, user.passwordHash) : false;
-  if (!user || !valid) throw AppError.unauthorized('Invalid email or password');
+  if (!user) {
+    throw new AppError(404, 'No account found with this email', [
+      { field: 'email', message: 'No account found with this email' },
+    ]);
+  }
+  const valid = await bcrypt.compare(input.password, user.passwordHash);
+  if (!valid) throw AppError.unauthorized('Incorrect password');
 
   return { user, token: signToken(user) };
 }
