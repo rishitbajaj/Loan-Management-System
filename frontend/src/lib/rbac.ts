@@ -34,3 +34,9 @@ export function homeFor(role: Role): string {
   if (role === 'admin') return '/dashboard';
   return modulesForRole(role)[0]?.href ?? '/dashboard';
 }
+
+export function formatRoleLabel(role: Role): string {
+  if (role === 'admin') return 'Admin';
+  if (role === 'borrower') return 'Borrower';
+  return role.charAt(0).toUpperCase() + role.slice(1);
+}

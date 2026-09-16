@@ -27,9 +27,10 @@ export function proxy(request: NextRequest) {
   const isAuthPage = pathname === '/login' || pathname === '/register';
   const isBorrowerArea = pathname.startsWith('/apply');
   const isDashboard = pathname.startsWith('/dashboard');
+  const isProfile = pathname.startsWith('/profile');
 
   if (!hasToken || !role) {
-    if (isBorrowerArea || isDashboard) {
+    if (isBorrowerArea || isDashboard || isProfile) {
       const url = request.nextUrl.clone();
       url.pathname = '/login';
       url.searchParams.set('next', pathname);
@@ -60,5 +61,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/', '/login', '/register', '/apply/:path*', '/dashboard/:path*'],
+  matcher: ['/', '/login', '/register', '/apply/:path*', '/dashboard/:path*', '/profile', '/profile/:path*'],
 };
