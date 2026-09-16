@@ -54,7 +54,7 @@ export async function getSummary(): Promise<DashboardSummary> {
   const [statusCounts, totalBorrowers, leads, money] = await Promise.all([
     Loan.aggregate<{ _id: LoanStatus; count: number }>([{ $group: { _id: '$status', count: { $sum: 1 } } }]),
     User.countDocuments({ role: 'borrower' }),
-    listSalesLeads().then((rows) => rows.length),
+    Loan.distinct('borrower').then((ids) => User.countDocuments({ role: 'borrower', _id: { $nin: ids } })),
     Loan.aggregate<{ disbursedPrincipal: number; outstanding: number }>([
       { $match: { status: { $in: ['disbursed', 'closed'] } } },
       {
@@ -72,7 +72,7 @@ export async function getSummary(): Promise<DashboardSummary> {
 
   return {
     loansByStatus,
-    totalLoans: statusCounts.reduce((sum, row) => sum + row.count, 0),
+    totalLoans: statusCounts.reduce((sum, row) => row.count + sum, 0),
     totalBorrowers,
     leads,
     disbursedPrincipal: money[0]?.disbursedPrincipal ?? 0,

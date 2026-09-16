@@ -19,8 +19,7 @@ export async function login(req: Request, res: Response): Promise<void> {
 }
 
 export async function me(req: Request, res: Response): Promise<void> {
-  const { id } = requireUser(req);
-  const user = await User.findById(id);
+  const user = req.userDoc ?? (await User.findById(requireUser(req).id));
   if (!user) throw AppError.notFound('User not found');
   sendSuccess(res, { user });
 }

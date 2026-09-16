@@ -20,6 +20,7 @@ export function RequireRole({ roles, children }: { roles: Role[]; children: Reac
     else if (!allowed) router.replace(homeFor(user.role));
   }, [loading, user, allowed, router]);
 
-  if (loading || !allowed) return <PageLoader />;
+  if (!user) return <PageLoader />;
+  if (!allowed) return <PageLoader />;
   return <>{children}</>;
 }

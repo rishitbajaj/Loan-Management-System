@@ -1,7 +1,14 @@
 import type { NextFunction, Request, Response } from 'express';
+import type { UserDocument } from '../models/User';
 import { User } from '../models/User';
 import { toAuthUser, verifyToken } from '../services/auth.service';
 import { AppError } from '../utils/AppError';
+
+declare module 'express-serve-static-core' {
+  interface Request {
+    userDoc?: UserDocument;
+  }
+}
 
 export async function authenticate(req: Request, _res: Response, next: NextFunction): Promise<void> {
   const header = req.headers.authorization;
@@ -13,6 +20,7 @@ export async function authenticate(req: Request, _res: Response, next: NextFunct
   const user = await User.findById(payload.sub);
   if (!user) throw AppError.unauthorized('User no longer exists');
 
+  req.userDoc = user;
   req.user = toAuthUser(user);
   next();
 }

@@ -24,7 +24,15 @@ export interface ApiResult<T> {
   message?: string;
 }
 
-export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api';
+function requiredApiUrl(): string {
+  const url = process.env.NEXT_PUBLIC_API_URL ?? (process.env.NODE_ENV === 'production' ? undefined : 'http://localhost:5000/api');
+  if (!url) {
+    throw new Error('NEXT_PUBLIC_API_URL is required in production');
+  }
+  return url;
+}
+
+export const API_URL = requiredApiUrl();
 export const TOKEN_KEY = 'lms_token';
 export const USER_KEY = 'lms_user';
 
