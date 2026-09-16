@@ -4,11 +4,11 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useBorrower, type BorrowerStep } from './BorrowerContext';
 
-const STEPS: { key: BorrowerStep; label: string; href: string }[] = [
-  { key: 'personal-details', label: 'Personal details', href: '/apply/personal-details' },
-  { key: 'salary-slip', label: 'Salary slip', href: '/apply/salary-slip' },
-  { key: 'loan', label: 'Loan & apply', href: '/apply/loan' },
-  { key: 'status', label: 'Status', href: '/apply/status' },
+const STEPS: { key: BorrowerStep; label: string; shortLabel: string; href: string }[] = [
+  { key: 'personal-details', label: 'Personal', shortLabel: '1', href: '/apply/personal-details' },
+  { key: 'salary-slip', label: 'Documents', shortLabel: '2', href: '/apply/salary-slip' },
+  { key: 'loan', label: 'Loan', shortLabel: '3', href: '/apply/loan' },
+  { key: 'status', label: 'Status', shortLabel: '4', href: '/apply/status' },
 ];
 
 export function Stepper() {
@@ -19,37 +19,73 @@ export function Stepper() {
     'personal-details': me?.profile?.breStatus === 'passed',
     'salary-slip': !!me?.profile?.salarySlip,
     loan: loans.length > 0,
-    status: false,
+    status: loans.length > 0,
   };
 
+  const compact = pathname.startsWith('/apply/loan');
+
   return (
-    <ol className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-      {STEPS.map((step, index) => {
-        const active = pathname.startsWith(step.href);
-        const accessible = canAccess(step.key);
-        const state = active ? 'active' : done[step.key] ? 'done' : accessible ? 'todo' : 'locked';
-        const styles = {
-          active: 'border-indigo-600 bg-indigo-50 text-indigo-700',
-          done: 'border-emerald-300 bg-emerald-50 text-emerald-800',
-          todo: 'border-slate-200 bg-white text-slate-700',
-          locked: 'border-slate-200 bg-slate-50 text-slate-400',
-        }[state];
+    <nav aria-label="Application progress" className={`overflow-x-auto ${compact ? 'mb-3' : 'mb-8'}`}>
+      <ol className={`flex min-w-[320px] items-center ${compact ? 'h-9' : ''}`}>
+        {STEPS.map((step, index) => {
+          const active = pathname.startsWith(step.href);
+          const accessible = canAccess(step.key);
+          const completed = done[step.key] && !active;
+          const state = active ? 'active' : completed ? 'done' : accessible ? 'todo' : 'locked';
 
-        const content = (
-          <span className="flex items-center gap-2">
-            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-current text-xs font-semibold">
-              {state === 'done' ? '\u2713' : index + 2}
+          const circle = (
+            <span
+              className={`flex shrink-0 items-center justify-center rounded-full font-semibold transition duration-200 ${
+                compact ? 'h-9 w-9 text-xs' : 'h-8 w-8 text-xs'
+              } ${
+                state === 'active'
+                  ? 'bg-[var(--primary)] text-white shadow-[var(--shadow-sm)]'
+                  : state === 'done'
+                    ? 'bg-[var(--success-bg)] text-[var(--success)] ring-2 ring-[var(--success)]/15'
+                    : 'border border-[var(--border)] bg-white text-[var(--text-disabled)]'
+              }`}
+            >
+              {state === 'done' ? '✓' : step.shortLabel}
             </span>
-            <span className="truncate text-sm font-medium">{step.label}</span>
-          </span>
-        );
+          );
 
-        return (
-          <li key={step.key} className={`rounded-lg border px-3 py-2 ${styles}`}>
-            {accessible ? <Link href={step.href}>{content}</Link> : content}
-          </li>
-        );
-      })}
-    </ol>
+          const label = (
+            <span
+              className={`mt-2 text-xs font-medium sm:mt-0 ${
+                state === 'active'
+                  ? 'text-[var(--primary)]'
+                  : state === 'done'
+                    ? 'text-[var(--text-secondary)]'
+                    : 'text-[var(--text-muted)]'
+              }`}
+            >
+              {step.label}
+            </span>
+          );
+
+          return (
+            <li key={step.key} className="flex flex-1 items-center last:flex-none">
+              {accessible ? (
+                <Link href={step.href} className="flex flex-col items-center gap-0 sm:flex-row sm:gap-2.5">
+                  {circle}
+                  {label}
+                </Link>
+              ) : (
+                <div className="flex flex-col items-center gap-0 sm:flex-row sm:gap-2.5">
+                  {circle}
+                  {label}
+                </div>
+              )}
+              {index < STEPS.length - 1 && (
+                <span
+                  aria-hidden
+                  className={`mx-2 hidden h-px flex-1 sm:block ${completed || active ? 'bg-[var(--primary)]/30' : 'bg-[var(--border)]'}`}
+                />
+              )}
+            </li>
+          );
+        })}
+      </ol>
+    </nav>
   );
 }
