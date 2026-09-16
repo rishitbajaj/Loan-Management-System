@@ -51,7 +51,7 @@ export function getApplicationChecklist(me: UserDetail | null, loanConfigured = 
     },
     {
       label: 'Documents',
-      detail: hasSlip ? 'Salary slip uploaded' : 'Pending',
+      detail: hasSlip ? 'Income proof uploaded' : 'Pending',
       complete: hasSlip,
     },
     {

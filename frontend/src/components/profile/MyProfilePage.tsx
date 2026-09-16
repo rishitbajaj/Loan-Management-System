@@ -105,11 +105,11 @@ export function MyProfilePage() {
               <ProfileRow label="PAN" value={profile?.pan ?? '—'} />
               <ProfileRow label="Date of birth" value={profile?.dob ? formatDate(profile.dob) : '—'} />
               <ProfileRow
-                label="Monthly salary"
+                label="Monthly income"
                 value={profile?.monthlySalary != null ? formatCurrency(profile.monthlySalary, true) : '—'}
               />
               <ProfileRow
-                label="Employment"
+                label="Employment status"
                 value={profile?.employmentMode ? EMPLOYMENT_LABELS[profile.employmentMode] : '—'}
               />
             </dl>
@@ -122,7 +122,7 @@ export function MyProfilePage() {
                 value={profile?.breStatus ? <BreBadge status={profile.breStatus} /> : '—'}
               />
               <ProfileRow
-                label="Salary slip"
+                label="Income proof"
                 value={<UploadBadge uploaded={!!profile?.salarySlip} />}
               />
               {profile?.salarySlip && (

@@ -45,7 +45,7 @@ export default function LoanConfigPage() {
 
   const startDate = useMemo(() => todayCalendarDate(), []);
   const plan = useMemo(() => calculateLoanPlan(principal, tenureDays, startDate), [principal, tenureDays, startDate]);
-  const monthlySalary = me?.profile?.monthlySalary;
+  const monthlyIncome = me?.profile?.monthlySalary;
 
   useEffect(() => {
     if (loading) return;
@@ -180,7 +180,7 @@ export default function LoanConfigPage() {
         <LoanEstimatedRepayment plan={plan} />
       </div>
 
-      <LoanInsightsStrip plan={plan} monthlySalary={monthlySalary} onCompareTenures={() => setCompareOpen(true)} />
+      <LoanInsightsStrip plan={plan} monthlyIncome={monthlyIncome} onCompareTenures={() => setCompareOpen(true)} />
 
       <CompareTenuresModal
         open={compareOpen}

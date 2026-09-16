@@ -33,7 +33,7 @@ export function runBre(input: BreInput): BreResult {
   }
 
   if (input.monthlySalary < MIN_MONTHLY_SALARY) {
-    failures.push(`Monthly salary must be at least Rs ${MIN_MONTHLY_SALARY.toLocaleString('en-IN')}`);
+    failures.push(`Monthly income must be at least Rs ${MIN_MONTHLY_SALARY.toLocaleString('en-IN')}`);
   }
 
   if (!PAN_REGEX.test(input.pan)) {

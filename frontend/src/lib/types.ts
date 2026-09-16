@@ -47,7 +47,10 @@ export interface BorrowerSummary {
   _id: string;
   name: string;
   email: string;
-  profile?: Pick<BorrowerProfile, 'fullName' | 'pan' | 'monthlySalary' | 'employmentMode' | 'breStatus'>;
+  profile?: Pick<
+    BorrowerProfile,
+    'fullName' | 'pan' | 'dob' | 'monthlySalary' | 'employmentMode' | 'breStatus' | 'breFailures' | 'salarySlip'
+  >;
 }
 
 export interface StatusHistoryEntry {

@@ -28,7 +28,7 @@ export function previewBre(input: { pan: string; dob: string; monthlySalary: num
   const hints: string[] = [];
   const ageError = getAgeValidationError(input.dob);
   if (ageError) hints.push(ageError);
-  if (input.monthlySalary > 0 && input.monthlySalary < MIN_MONTHLY_SALARY) hints.push('Monthly salary must be at least Rs 25,000');
+  if (input.monthlySalary > 0 && input.monthlySalary < MIN_MONTHLY_SALARY) hints.push('Monthly income must be at least Rs 25,000');
   if (input.pan && !PAN_REGEX.test(input.pan.toUpperCase())) hints.push('PAN must look like AAAAA9999A');
   if (input.employmentMode === 'unemployed') hints.push('Applicant must be salaried or self-employed');
   return hints;

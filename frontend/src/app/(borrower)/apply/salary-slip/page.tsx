@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { PageLoader } from '@/components/ui/Spinner';
 import { useToast } from '@/components/ui/Toast';
 import { api, ApiError, errorMessage, fetchBlob } from '@/lib/api';
+import { incomeProofDescription, incomeProofUploadLabel } from '@/lib/employment-labels';
 import { formatBytes } from '@/lib/format';
 import type { UserDetail } from '@/lib/types';
 import { useRouter } from 'next/navigation';
@@ -116,7 +117,7 @@ export default function SalarySlipPage() {
       setFile(null);
       if (fileInputRef.current) fileInputRef.current.value = '';
       setJustUploaded(true);
-      success('Salary slip uploaded successfully.');
+      success('Income proof uploaded successfully.');
     } catch (err) {
       const message = errorMessage(err);
       setError(message);
@@ -128,6 +129,7 @@ export default function SalarySlipPage() {
 
   if (loading || !canAccess('salary-slip')) return <PageLoader />;
 
+  const employmentMode = me?.profile?.employmentMode;
   const slip = me?.profile?.salarySlip;
   const isImage = slip?.mimeType.startsWith('image/');
   const showPending = !!file;
@@ -136,16 +138,13 @@ export default function SalarySlipPage() {
 
   return (
     <div>
-      <BorrowerPageIntro
-        title="Salary slip"
-        description="Upload a recent salary slip to continue. PDF, JPG or PNG · Maximum 5 MB."
-      />
+      <BorrowerPageIntro title="Income proof" description={incomeProofDescription(employmentMode)} />
 
       <Card>
         <form onSubmit={onSubmit} className="space-y-5">
           {error && <Alert kind="error">{error}</Alert>}
 
-          {uploadComplete && <Alert kind="success" title="Salary slip uploaded" />}
+          {uploadComplete && <Alert kind="success" title="Income proof uploaded" />}
 
           {showPending && (
             <FilePreviewRow
@@ -179,7 +178,7 @@ export default function SalarySlipPage() {
               }`}
             >
               <DocumentIcon className="mb-3 h-9 w-9 text-[var(--text-muted)]" />
-              <p className="text-base font-semibold text-[var(--text-primary)]">Upload your salary slip</p>
+              <p className="text-base font-semibold text-[var(--text-primary)]">{incomeProofUploadLabel(employmentMode)}</p>
               <p className="mt-2 text-sm text-[var(--text-muted)]">PDF, JPG or PNG up to 5 MB</p>
               <Button type="button" variant="secondary" size="sm" className="mt-5" onClick={openFilePicker}>
                 Choose document
@@ -190,9 +189,9 @@ export default function SalarySlipPage() {
           {showUploaded && previewUrl && (
             <div className="overflow-hidden rounded-[var(--radius-xl)] border border-[var(--border)] bg-[var(--surface)]">
               {isImage ? (
-                <img src={previewUrl} alt="Salary slip preview" className="max-h-64 w-full object-contain" />
+                <img src={previewUrl} alt="Income proof preview" className="max-h-64 w-full object-contain" />
               ) : (
-                <iframe title="Salary slip" src={previewUrl} className="h-64 w-full" />
+                <iframe title="Income proof" src={previewUrl} className="h-64 w-full" />
               )}
             </div>
           )}
@@ -215,7 +214,7 @@ export default function SalarySlipPage() {
               </Button>
             ) : (
               <Button type="submit" className="w-full sm:w-auto" loading={submitting} disabled={submitting || !file}>
-                {submitting ? 'Uploading...' : 'Upload salary slip'}
+                {submitting ? 'Uploading...' : 'Upload income proof'}
               </Button>
             )}
           </FormActions>

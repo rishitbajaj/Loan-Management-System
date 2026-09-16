@@ -1,12 +1,14 @@
 import { Types } from 'mongoose';
 import { Loan, type LoanDocument } from '../models/Loan';
-import { User } from '../models/User';
+import { User, type ISalarySlip } from '../models/User';
 import { ACTIVE_LOAN_STATUSES, type AuthUser, type LoanStatus, type Role } from '../types';
 import { AppError } from '../utils/AppError';
 import { calculateLoan } from '../utils/loanMath';
 import type { LoanTermsInput } from '../validation/loan.schema';
+import * as borrowerService from './borrower.service';
 
-export const BORROWER_FIELDS = 'name email profile.fullName profile.pan profile.monthlySalary profile.employmentMode profile.breStatus';
+export const BORROWER_FIELDS =
+  'name email profile.fullName profile.pan profile.dob profile.monthlySalary profile.employmentMode profile.breStatus profile.breFailures profile.salarySlip';
 
 const TRANSITIONS: Record<LoanStatus, Partial<Record<LoanStatus, Role[]>>> = {
   applied: { sanctioned: ['sanction', 'admin'], rejected: ['sanction', 'admin'] },
@@ -63,6 +65,13 @@ async function findLoanOrFail(loanId: string): Promise<LoanDocument> {
   const loan = await Loan.findById(loanId);
   if (!loan) throw AppError.notFound('Loan not found');
   return loan;
+}
+
+function borrowerIdOf(loan: LoanDocument): string {
+  if (loan.populated('borrower')) {
+    return String((loan.borrower as unknown as { _id: unknown })._id);
+  }
+  return String(loan.borrower);
 }
 
 export async function sanctionLoan(loanId: string, actor: AuthUser): Promise<LoanDocument> {
@@ -127,10 +136,14 @@ export async function getLoanForUser(loanId: string, user: AuthUser): Promise<Lo
   if (!loan) throw AppError.notFound('Loan not found');
 
   if (user.role === 'borrower') {
-    const ownerId = loan.populated('borrower') ? String((loan.borrower as unknown as { _id: unknown })._id) : String(loan.borrower);
-    if (ownerId !== user.id) throw AppError.forbidden('You can only view your own loans');
+    if (borrowerIdOf(loan) !== user.id) throw AppError.forbidden('You can only view your own loans');
   } else if (user.role === 'sales') {
     throw AppError.forbidden('Sales cannot access loan records');
   }
   return loan;
+}
+
+export async function getSalarySlipForLoan(loanId: string, user: AuthUser): Promise<ISalarySlip> {
+  const loan = await getLoanForUser(loanId, user);
+  return borrowerService.getSalarySlip(borrowerIdOf(loan));
 }

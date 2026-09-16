@@ -1,4 +1,5 @@
 import type { Request, Response } from 'express';
+import path from 'node:path';
 import { requireUser } from '../middleware/auth';
 import * as borrowerService from '../services/borrower.service';
 import { AppError } from '../utils/AppError';
@@ -25,5 +26,5 @@ export async function downloadSalarySlip(req: Request, res: Response): Promise<v
   res.setHeader('Content-Type', slip.mimeType);
   res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(slip.originalName)}"`);
   res.setHeader('Cache-Control', 'private, no-store');
-  res.sendFile(slip.path);
+  res.sendFile(path.resolve(slip.path));
 }

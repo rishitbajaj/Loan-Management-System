@@ -56,7 +56,7 @@ export function salesFilterEmptyMessage(filter: SalesLeadFilter): { title: strin
     case 'documents-pending':
       return {
         title: 'No document pending leads',
-        description: 'All leads in this view have uploaded their salary slip.',
+        description: 'All leads in this view have uploaded income proof.',
       };
     default:
       return {

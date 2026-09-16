@@ -10,9 +10,19 @@ interface ModalProps {
   children: ReactNode;
   footer?: ReactNode;
   preventClose?: boolean;
+  size?: 'md' | 'lg';
 }
 
-export function Modal({ open, title, description, onClose, children, footer, preventClose = false }: ModalProps) {
+export function Modal({
+  open,
+  title,
+  description,
+  onClose,
+  children,
+  footer,
+  preventClose = false,
+  size = 'md',
+}: ModalProps) {
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -39,7 +49,9 @@ export function Modal({ open, title, description, onClose, children, footer, pre
         role="dialog"
         aria-modal="true"
         aria-labelledby="modal-title"
-        className="animate-panel flex max-h-[min(90dvh,calc(100vh-2rem))] w-full max-w-[520px] flex-col rounded-[var(--radius-2xl)] border border-[var(--border)] bg-white p-7 shadow-[var(--shadow-modal)]"
+        className={`animate-panel flex max-h-[min(90dvh,calc(100vh-2rem))] w-full flex-col rounded-[var(--radius-2xl)] border border-[var(--border)] bg-white p-7 shadow-[var(--shadow-modal)] ${
+          size === 'lg' ? 'max-w-4xl' : 'max-w-[520px]'
+        }`}
         onClick={(e) => e.stopPropagation()}
       >
         <header className="shrink-0">

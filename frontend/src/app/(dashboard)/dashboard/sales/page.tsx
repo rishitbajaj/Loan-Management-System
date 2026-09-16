@@ -34,10 +34,10 @@ function SalesLeadTable({ leads }: { leads: SalesLead[] }) {
             <tr>
               <Th>Borrower</Th>
               <Th>PAN</Th>
-              <Th align="right">Monthly salary</Th>
+              <Th align="right">Monthly income</Th>
               <Th>Employment</Th>
               <Th>Eligibility</Th>
-              <Th>Salary slip</Th>
+              <Th>Income proof</Th>
               <Th>Registered</Th>
             </tr>
           </Thead>
@@ -81,7 +81,7 @@ function SalesLeadTable({ leads }: { leads: SalesLead[] }) {
                 <dd className="mt-0.5">{lead.profile?.pan ?? '—'}</dd>
               </div>
               <div>
-                <dt className={sectionLabelClass}>Monthly salary</dt>
+                <dt className={sectionLabelClass}>Monthly income</dt>
                 <dd className="mt-0.5 tabular-nums">
                   {lead.profile?.monthlySalary != null ? formatCurrency(lead.profile.monthlySalary, true) : '—'}
                 </dd>

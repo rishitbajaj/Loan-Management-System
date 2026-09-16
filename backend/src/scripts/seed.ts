@@ -9,6 +9,7 @@ import { User, type IBorrowerProfile, type ISalarySlip } from '../models/User';
 import { hashPassword } from '../services/auth.service';
 import type { EmploymentMode, LoanStatus, Role } from '../types';
 import { calculateLoan, roundTo2 } from '../utils/loanMath';
+import { buildSalarySlipPdf } from '../utils/salarySlipPdf';
 
 export const SEED_PASSWORD = 'Password@123';
 
@@ -178,27 +179,27 @@ function daysAgo(days: number): Date {
   return date;
 }
 
-function ensureSeedSalarySlipFile(): string {
+function writeSeedSalarySlip(profile: IBorrowerProfile, label: string): ISalarySlip {
   fs.mkdirSync(env.salarySlipDir, { recursive: true });
-  const filePath = path.join(env.salarySlipDir, 'seed-demo-salary-slip.pdf');
-  if (!fs.existsSync(filePath)) {
-    fs.writeFileSync(filePath, '%PDF-1.4\n% Seed placeholder salary slip for local QA\n');
-  }
-  return filePath;
-}
-
-function seedSalarySlip(slipPath: string, label: string): ISalarySlip {
+  const filePath = path.join(env.salarySlipDir, `seed-${label}-salary-slip.pdf`);
+  const pdf = buildSalarySlipPdf({
+    employeeName: profile.fullName ?? label,
+    pan: profile.pan,
+    employmentMode: profile.employmentMode,
+    monthlySalary: profile.monthlySalary,
+  });
+  fs.writeFileSync(filePath, pdf);
   return {
-    path: slipPath,
+    path: filePath,
     originalName: `${label}-salary-slip.pdf`,
     mimeType: 'application/pdf',
-    size: 245_760,
+    size: pdf.length,
     uploadedAt: daysAgo(14),
   };
 }
 
-function withSalarySlip(profile: IBorrowerProfile, slipPath: string, label: string): IBorrowerProfile {
-  return { ...profile, salarySlip: seedSalarySlip(slipPath, label) };
+function withSalarySlip(profile: IBorrowerProfile, label: string): IBorrowerProfile {
+  return { ...profile, salarySlip: writeSeedSalarySlip(profile, label) };
 }
 
 function needsSalarySlip(seed: BorrowerSeed): boolean {
@@ -329,7 +330,6 @@ function buildLoanDocument(
 async function seed(): Promise<void> {
   await connectDb();
   const passwordHash = await hashPassword(SEED_PASSWORD);
-  const slipPath = ensureSeedSalarySlipFile();
 
   for (const account of SEED_ACCOUNTS) {
     await upsertUser(account.name, account.email, account.role, passwordHash);
@@ -339,7 +339,7 @@ async function seed(): Promise<void> {
   for (const borrower of SEED_BORROWERS) {
     let profile = borrower.profile;
     if (needsSalarySlip(borrower)) {
-      profile = withSalarySlip(profile, slipPath, borrower.email.split('@')[0] ?? 'borrower');
+      profile = withSalarySlip(profile, borrower.email.split('@')[0] ?? 'borrower');
     }
 
     await upsertUser(borrower.name, borrower.email, 'borrower', passwordHash, profile);

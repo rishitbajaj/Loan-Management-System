@@ -27,7 +27,7 @@ function toDateInput(value?: string): string {
 function classifyFailure(message: string): { label: string; text: string } {
   const lower = message.toLowerCase();
   if (lower.includes('age')) return { label: 'Age', text: message };
-  if (lower.includes('salary')) return { label: 'Salary', text: message };
+  if (lower.includes('salary') || lower.includes('income')) return { label: 'Income', text: message };
   if (lower.includes('pan')) return { label: 'PAN', text: message };
   if (lower.includes('employ') || lower.includes('unemployed')) return { label: 'Employment', text: message };
   return { label: 'Eligibility', text: message };
@@ -167,21 +167,31 @@ export default function PersonalDetailsPage() {
             />
             <BorrowerInput
               id="monthlySalary"
-              label="Monthly salary (₹)"
+              label="Monthly income (₹)"
               type="number"
               min={0}
               required
               value={form.monthlySalary}
               onChange={set('monthlySalary')}
               error={apiErr?.fieldMessage('monthlySalary')}
-              hint={apiErr?.fieldMessage('monthlySalary') ? undefined : 'Minimum ₹25,000'}
-              valid={!!form.monthlySalary && Number(form.monthlySalary) >= 25000 && !apiErr?.fieldMessage('monthlySalary')}
+              hint={
+                apiErr?.fieldMessage('monthlySalary')
+                  ? undefined
+                  : form.employmentMode === 'unemployed'
+                    ? 'Enter 0 if you have no regular income'
+                    : 'Minimum ₹25,000 for salaried and self-employed applicants'
+              }
+              valid={
+                form.employmentMode === 'unemployed'
+                  ? form.monthlySalary !== '' && !apiErr?.fieldMessage('monthlySalary')
+                  : !!form.monthlySalary && Number(form.monthlySalary) >= 25000 && !apiErr?.fieldMessage('monthlySalary')
+              }
             />
 
             <SectionLabel className="sm:col-span-2">Employment information</SectionLabel>
             <BorrowerSelect
               id="employmentMode"
-              label="Employment mode"
+              label="Employment status"
               required
               placeholder="Select employment"
               options={EMPLOYMENT_OPTIONS}

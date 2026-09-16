@@ -11,18 +11,18 @@ import { useState } from 'react';
 
 interface LoanInsightsStripProps {
   plan: LoanPlan;
-  monthlySalary?: number;
+  monthlyIncome?: number;
   onCompareTenures: () => void;
 }
 
 const actionClass =
   'text-[13px] font-semibold text-[var(--primary)] transition hover:text-[var(--primary-hover)] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]/30';
 
-export function LoanInsightsStrip({ plan, monthlySalary, onCompareTenures }: LoanInsightsStripProps) {
+export function LoanInsightsStrip({ plan, monthlyIncome, onCompareTenures }: LoanInsightsStripProps) {
   const [kfsOpen, setKfsOpen] = useState(false);
   const monthlyEquivalent = estimatedMonthlyRepayment(plan.totalRepayment, plan.tenureDays);
-  const ratio = monthlySalary ? incomeToRepaymentRatio(monthlySalary, plan.totalRepayment, plan.tenureDays) : null;
-  const showAffordability = monthlySalary != null && monthlySalary > 0;
+  const ratio = monthlyIncome ? incomeToRepaymentRatio(monthlyIncome, plan.totalRepayment, plan.tenureDays) : null;
+  const showAffordability = monthlyIncome != null && monthlyIncome > 0;
 
   return (
     <>
@@ -32,7 +32,7 @@ export function LoanInsightsStrip({ plan, monthlySalary, onCompareTenures }: Loa
             <p className="text-[var(--text-secondary)]">
               <span className="font-semibold text-[var(--text-primary)]">Affordability</span>
               {' · '}
-              {formatCurrency(monthlySalary!, true)} income · {formatCurrency(monthlyEquivalent)} estimated equivalent
+              {formatCurrency(monthlyIncome!, true)} monthly income · {formatCurrency(monthlyEquivalent)} estimated equivalent
               {ratio != null && <> · {ratio}% ratio</>}
               {' · '}
               <span className="text-[var(--text-muted)]">Estimate only</span>

@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { api, errorMessage } from '@/lib/api';
+import { requiresIncomeProof } from '@/lib/employment-labels';
 import type { Loan, UserDetail } from '@/lib/types';
 
 export type BorrowerStep = 'personal-details' | 'salary-slip' | 'loan' | 'status';
@@ -50,17 +51,25 @@ export function BorrowerProvider({ children }: { children: ReactNode }) {
     const latestLoan = loans[0] ?? null;
     const brePassed = me?.profile?.breStatus === 'passed';
     const hasSlip = !!me?.profile?.salarySlip;
+    const needsIncomeProof = requiresIncomeProof(me?.profile?.employmentMode);
+    const incomeProofComplete = !needsIncomeProof || hasSlip;
 
-    const nextStep: BorrowerStep = activeLoan ? 'status' : !brePassed ? 'personal-details' : !hasSlip ? 'salary-slip' : 'loan';
+    const nextStep: BorrowerStep = activeLoan
+      ? 'status'
+      : !brePassed
+        ? 'personal-details'
+        : needsIncomeProof && !hasSlip
+          ? 'salary-slip'
+          : 'loan';
 
     const canAccess = (step: BorrowerStep): boolean => {
       switch (step) {
         case 'personal-details':
           return !activeLoan;
         case 'salary-slip':
-          return !activeLoan && brePassed;
+          return !activeLoan && brePassed && needsIncomeProof;
         case 'loan':
-          return !activeLoan && brePassed && hasSlip;
+          return !activeLoan && brePassed && incomeProofComplete;
         case 'status':
           return loans.length > 0;
       }
