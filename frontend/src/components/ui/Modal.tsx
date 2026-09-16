@@ -9,35 +9,51 @@ interface ModalProps {
   onClose: () => void;
   children: ReactNode;
   footer?: ReactNode;
+  preventClose?: boolean;
 }
 
-export function Modal({ open, title, description, onClose, children, footer }: ModalProps) {
+export function Modal({ open, title, description, onClose, children, footer, preventClose = false }: ModalProps) {
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !preventClose) onClose();
+    };
     document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = '';
+    };
+  }, [open, onClose, preventClose]);
 
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-40 flex items-end justify-center bg-slate-900/50 p-4 sm:items-center" onClick={onClose}>
+    <div
+      className="animate-overlay fixed inset-0 z-50 flex items-end justify-center bg-[rgba(15,23,42,0.35)] p-4 sm:items-center"
+      onClick={() => {
+        if (!preventClose) onClose();
+      }}
+    >
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="modal-title"
-        className="w-full max-w-lg rounded-xl bg-white shadow-xl"
+        className="animate-panel flex max-h-[min(90dvh,calc(100vh-2rem))] w-full max-w-[520px] flex-col rounded-[var(--radius-2xl)] border border-[var(--border)] bg-white p-7 shadow-[var(--shadow-modal)]"
         onClick={(e) => e.stopPropagation()}
       >
-        <header className="border-b border-slate-100 px-5 py-4">
-          <h2 id="modal-title" className="text-base font-semibold text-slate-900">
+        <header className="shrink-0">
+          <h2 id="modal-title" className="text-xl font-semibold tracking-tight text-[var(--text-primary)]">
             {title}
           </h2>
-          {description && <p className="mt-1 text-sm text-slate-500">{description}</p>}
+          {description && <p className="mt-2 text-sm text-[var(--text-muted)]">{description}</p>}
         </header>
-        <div className="px-5 py-4">{children}</div>
-        {footer && <footer className="flex flex-col-reverse gap-2 border-t border-slate-100 px-5 py-4 sm:flex-row sm:justify-end">{footer}</footer>}
+        <div className="mt-5 min-h-0 flex-1 overflow-y-auto overscroll-contain">{children}</div>
+        {footer && (
+          <footer className="mt-6 shrink-0 flex flex-col-reverse gap-2 border-t border-[var(--border-light)] pt-5 sm:flex-row sm:justify-end">
+            {footer}
+          </footer>
+        )}
       </div>
     </div>
   );

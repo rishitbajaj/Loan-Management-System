@@ -19,9 +19,9 @@ interface ToastContextValue {
 const ToastContext = createContext<ToastContextValue | null>(null);
 
 const STYLES: Record<ToastKind, string> = {
-  success: 'border-emerald-200 bg-emerald-50 text-emerald-900',
-  error: 'border-red-200 bg-red-50 text-red-900',
-  info: 'border-slate-200 bg-white text-slate-900',
+  success: 'border-emerald-200 bg-[var(--success-bg)] text-emerald-900',
+  error: 'border-red-200 bg-[var(--danger-bg)] text-red-900',
+  info: 'border-cyan-200 bg-[var(--info-bg)] text-cyan-950',
 };
 
 export function ToastProvider({ children }: { children: ReactNode }) {
@@ -30,7 +30,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const toast = useCallback((message: string, kind: ToastKind = 'info') => {
     const id = Date.now() + Math.random();
     setToasts((prev) => [...prev, { id, kind, message }]);
-    window.setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 4500);
+    window.setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 3500);
   }, []);
 
   const value = useMemo<ToastContextValue>(
@@ -41,12 +41,12 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={value}>
       {children}
-      <div aria-live="polite" className="pointer-events-none fixed inset-x-0 bottom-4 z-50 flex flex-col items-center gap-2 px-4 sm:items-end sm:pr-6">
+      <div aria-live="polite" className="pointer-events-none fixed right-4 top-4 z-[100] flex flex-col items-end gap-2">
         {toasts.map((t) => (
           <div
             key={t.id}
             role="status"
-            className={`pointer-events-auto w-full max-w-sm rounded-lg border px-4 py-3 text-sm shadow-lg ${STYLES[t.kind]}`}
+            className={`pointer-events-auto max-w-xs rounded-[var(--radius-md)] border px-3.5 py-2.5 text-sm font-medium shadow-[var(--shadow-md)] ${STYLES[t.kind]}`}
           >
             {t.message}
           </div>
