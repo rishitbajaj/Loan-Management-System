@@ -1,97 +1,68 @@
 # Loan Management System
 
-MERN-style lending platform: borrowers apply for a loan, internal executives move it through its lifecycle.
+This is a small lending app I built for the full-stack assignment. A borrower signs up, fills personal details, uploads a salary slip, and applies for a loan. After that, internal teams take over: sales looks at people who have not applied yet, sanction approves or rejects, disbursement releases the money, and collection records repayments until the loan closes.
 
-- Frontend: Next.js App Router, TypeScript, Tailwind CSS (`frontend/`)
-- Backend: Node.js, Express, TypeScript, Mongoose (`backend/`)
-- Database: MongoDB Atlas
-- Auth: JWT + bcrypt
+Admin can open every module. Everyone else only sees their own.
 
-## Architecture
+## Stack
 
-```
-Borrower / Executive UI (Next.js)
-        |
-   UX route guard (src/proxy.ts + AuthProvider)
-        |
-   HTTP + Bearer JWT
-        |
-Express: helmet, CORS(CLIENT_URL)
-        |
-JWT auth middleware          -> 401 if missing/invalid
-RBAC requireRole middleware  -> 403 if wrong role
-Controller / service         -> 404 / 409 / 422 business rules
-MongoDB (users, loans, payments)
-```
+- Frontend: Next.js (App Router), TypeScript, Tailwind
+- Backend: Node.js, Express, TypeScript
+- Database: MongoDB with Mongoose
+- Auth: JWT and bcrypt
 
-Frontend route protection is navigation only. The backend independently verifies the JWT, loads the user, and derives the role. A client-supplied `role` is ignored. Register always creates a `borrower`.
+The UI lives in `frontend/`. The API lives in `backend/`.
 
-## Prerequisites
+## What you need
 
-- Node.js 24+ and npm 11+
-- A MongoDB Atlas cluster (free tier is enough)
-- Atlas Database Access user and Network Access IP allow-list (or `0.0.0.0/0` for local eval)
+- Node.js 24 or newer
+- MongoDB running locally, or a MongoDB Atlas cluster
 
 ## Setup
 
-### 1. Clone and install
-
 ```bash
-cd Loan-Management-System
 cd backend && npm install
 cd ../frontend && npm install
 ```
 
-### 2. MongoDB Atlas
-
-1. Create a cluster and a database user.
-2. Allow your IP (or `0.0.0.0/0` for evaluation).
-3. Copy the connection string.
-
-### 3. Environment
+Copy the env files:
 
 ```bash
 cp backend/.env.example backend/.env
 cp frontend/.env.example frontend/.env.local
 ```
 
-`backend/.env`
+In `backend/.env`, set `MONGODB_URI` and a long `JWT_SECRET` (at least 16 characters). The example file is already pointed at local Mongo on port 27017. If you are using Atlas, swap in the `mongodb+srv://...` URI and allow your IP.
 
-| Variable | Example | Purpose |
-| --- | --- | --- |
-| `PORT` | `5000` | API port |
-| `NODE_ENV` | `development` | `production` hides stack traces |
-| `MONGODB_URI` | `mongodb+srv://user:pass@cluster/lms?...` | Atlas URI |
-| `JWT_SECRET` | long random string (16+ chars) | Signs JWTs |
-| `JWT_EXPIRES_IN` | `1d` | Token lifetime |
-| `CLIENT_URL` | `http://localhost:3000` | CORS origin (not `*`) |
-| `UPLOAD_DIR` | `uploads` | Disk folder for salary slips |
+`frontend/.env.local` only needs:
 
-`frontend/.env.local`
+```
+NEXT_PUBLIC_API_URL=http://localhost:5000/api
+```
 
-| Variable | Example |
-| --- | --- |
-| `NEXT_PUBLIC_API_URL` | `http://localhost:5000/api` |
+`CLIENT_URL` on the backend should match wherever Next is running, usually `http://localhost:3000`.
 
-### 4. Seed accounts
+Create the demo accounts:
 
 ```bash
 cd backend
 npm run seed
 ```
 
-Idempotent (upsert by email). Password for every seeded account: `Password@123`
+You can run seed more than once. It upserts by email, so it will not duplicate users. Every seeded account uses the same password: `Password@123`
 
 | Role | Email |
 | --- | --- |
-| Admin | `admin@lms.com` |
-| Sales | `sales@lms.com` |
-| Sanction | `sanction@lms.com` |
-| Disbursement | `disbursement@lms.com` |
-| Collection | `collection@lms.com` |
-| Borrower | `borrower@lms.com` |
+| Admin | admin@lms.com |
+| Sales | sales@lms.com |
+| Sanction | sanction@lms.com |
+| Disbursement | disbursement@lms.com |
+| Collection | collection@lms.com |
+| Borrower | borrower@lms.com |
 
-### 5. Run
+There are extra seeded borrowers as well (`borrower-applied@lms.com`, `borrower-sanctioned@lms.com`, and so on) so the queues are not empty on first login.
+
+Start both servers:
 
 ```bash
 # terminal 1
@@ -101,120 +72,133 @@ cd backend && npm run dev
 cd frontend && npm run dev
 ```
 
-- API: http://localhost:5000/api/health
-- UI: http://localhost:3000
+API health check: http://localhost:5000/api/health
 
-## Loan status lifecycle
+App: http://localhost:3000
 
-Statuses used everywhere: `applied`, `sanctioned`, `rejected`, `disbursed`, `closed`.
+## How a loan moves
 
-**`applied` represents the pending application state described in the assignment.** There is no separate `pending` status.
+I used these statuses: `applied`, `sanctioned`, `rejected`, `disbursed`, `closed`.
+
+The assignment text says "pending" once. The diagram on the same PDF uses APPLIED, so that is the name I went with. An applied loan is the one waiting for sanction.
 
 ```
-Borrower applies
-    -> applied
-         -> sanctioned   (sanction / admin)
-         -> rejected     (sanction / admin, reason required)
-    sanctioned
-         -> disbursed    (disbursement / admin)
-    disbursed
-         -> closed       (automatic when outstanding hits 0)
+borrower applies
+        |
+     applied
+    /        \
+sanctioned    rejected   (sanction or admin; reject needs a reason)
+    |
+disbursed                (disbursement or admin)
+    |
+  closed                 (automatic when outstanding hits 0)
 ```
 
-`rejected` and `closed` are terminal. Transitions go through `loanService.transition()` only. Clients cannot PATCH `{ "status": "sanctioned" }`. Each transition appends `statusHistory` and sets audit fields (`sanctionedBy/At`, `disbursedBy/At`, `closedAt`, `rejectionReason`).
+Rejected and closed are the end. You cannot jump statuses from the client. The API has separate routes for sanction, reject, and disburse, and each one is role-checked on the server.
 
-## RBAC
+A borrower can only have one active loan (`applied`, `sanctioned`, or `disbursed`). After reject or close they can apply again.
 
-| Role | UI | APIs |
-| --- | --- | --- |
-| Borrower | `/apply/*` | profile, salary slip, create/list own loans |
-| Sales | `/dashboard/sales` | sales leads |
-| Sanction | `/dashboard/sanction` | applied loans, approve, reject |
-| Disbursement | `/dashboard/disbursement` | sanctioned loans, disburse |
-| Collection | `/dashboard/collection` | disbursed/closed loans, payments |
-| Admin | all dashboard modules + overview | all of the above |
+## Borrower flow
 
-HTTP codes:
+1. Register or log in.
+2. Personal details: full name, PAN, date of birth, monthly salary, employment type.
+3. Eligibility is checked on the server (BRE). If anything fails, the form shows every failure, not just the first one.
+4. Upload a salary slip (PDF, JPG or PNG, max 5 MB).
+5. Pick amount (Rs 50,000 to Rs 5,00,000) and tenure (30 to 365 days) with sliders. Interest is 12% p.a. The panel on the right updates as you drag.
+6. Apply. The loan is created as `applied`.
 
-- `401` unauthenticated / bad JWT
-- `403` authenticated but wrong role
-- `404` missing resource
-- `409` conflict (active loan, duplicate UTR, illegal transition)
-- `422` validation (zod, overpayment, bad file)
+Simple interest:
 
-## BRE (Business Rule Engine)
+```
+SI = (P * R * T) / (365 * 100)
+```
 
-Implemented in `backend/src/services/bre.service.ts`. Runs on `PUT /api/borrower/profile`. Returns **all** failures, not the first one.
+`T` is tenure in days. Total repayment is principal plus interest. The frontend shows this live, but the backend recalculates it when you apply. Whatever interest the client sends is ignored.
 
-| Rule | Reject when |
+## BRE
+
+This runs in `backend/src/services/bre.service.ts` on `PUT /api/borrower/profile`.
+
+| Rule | Fails when |
 | --- | --- |
-| Age | not between 23 and 50 inclusive |
-| Salary | below Rs 25,000 / month |
-| PAN | does not match `^[A-Z]{5}[0-9]{4}[A-Z]{1}$` |
-| Employment | `unemployed` |
+| Age | not between 23 and 50 |
+| Salary | below Rs 25,000 a month |
+| PAN | not in the form AAAAA9999A |
+| Employment | unemployed |
 
-The frontend mirrors these messages for instant hints. The server result is the only one that is stored.
+The UI repeats these checks so the borrower gets instant feedback, but only the server result is saved. A borrower who failed BRE cannot apply.
 
-## Loan calculation
+## Roles
 
-`SI = (P × R × T) / (365 × 100)` with `R = 12`, `T` in days.
+Hiding a menu item is not the real check. Every protected API route also checks the JWT and the role.
 
-- Principal: 50,000 – 5,00,000
-- Tenure: 30 – 365 days
-- Money rounded to 2 decimal places (`roundTo2`)
+| Role | Can do |
+| --- | --- |
+| Borrower | Application portal only. Cannot open the dashboard. |
+| Sales | Leads: registered borrowers who have never applied. |
+| Sanction | Applied loans. Approve, or reject with a reason. Can open the application and view the salary slip. |
+| Disbursement | Sanctioned loans. Mark as disbursed. |
+| Collection | Disbursed loans. Record payments. Closed loans show up as history. |
+| Admin | Everything above, plus a summary page. |
 
-Frontend (`frontend/src/lib/loanMath.ts`) updates the live panel. Backend (`backend/src/utils/loanMath.ts`) recalculates on apply. The client may send only `{ principal, tenureDays }`. `interest` / `totalRepayment` from the client are ignored.
+Unauthorized API calls get `401` if there is no valid token, and `403` if the role is wrong.
 
 ## Payments
 
-- Allowed only when status is `disbursed`
-- `paidOn` is **required** and cannot be in the future (omit = 422)
-- Amount > 0 and ≤ outstanding (else 422)
-- UTR required, trimmed, uppercased, unique across all payments (Mongo unique index + 409)
-- `totalPaid = roundTo2(prev + amount)`, `outstanding = roundTo2(totalRepayment - totalPaid)`
-- If outstanding is 0, the loan transitions to `closed` and `closedAt` is set
+Collection can record a payment only on a disbursed loan. Each payment needs:
+
+- UTR (unique across the whole system)
+- Amount (greater than 0, not more than outstanding)
+- Date (required, not in the future)
+
+When `totalPaid` reaches `totalRepayment`, outstanding becomes 0 and the loan closes on its own.
+
+If you reuse a UTR you get `409`. If you overpay you get `422`.
 
 ## Salary slips
 
-- `POST /api/borrower/salary-slip` multipart field `file`
-- PDF / JPG / PNG, max 5 MB
-- Stored under `backend/uploads/salary-slips/` with a generated filename (`<userId>-<uuid>.<ext>`)
-- **Not** served as a static URL
-- `GET /api/borrower/salary-slip` streams the file after JWT + borrower checks
-- Filesystem `path` is never returned in JSON
-- `backend/uploads/` is gitignored
+Files are stored on disk under `backend/uploads/salary-slips/`, not as public URLs. The JSON never includes the filesystem path. Download goes through authenticated routes:
 
-## Active loan rule
+- borrower: `GET /api/borrower/salary-slip`
+- staff reviewing a loan: `GET /api/loans/:id/salary-slip`
 
-A borrower may have only one loan in `applied | sanctioned | disbursed`. A second apply returns `409` with `"Borrower already has an active loan"`. After `rejected` or `closed` they may apply again. Enforced on the server.
+`backend/uploads/` is gitignored.
 
-## Sales leads
+## API notes
 
-A lead is a **borrower who has never created a loan** (not "no active loan"). Implemented with `$lookup` on `loans` and `$match` empty array.
+Public routes: register, login, loan calculate, health.
 
-## API
+Everything else needs `Authorization: Bearer <token>`.
 
-All `/api/*` except register, login, calculate, and health require `Authorization: Bearer <jwt>`.
+Responses look like:
 
-Success: `{ "success": true, "message?": "...", "data": {} }`  
-Error: `{ "success": false, "message": "...", "errors?": [{ "field", "message" }] }`
+```json
+{ "success": true, "data": {} }
+```
+
+or
+
+```json
+{ "success": false, "message": "...", "errors": [{ "field": "...", "message": "..." }] }
+```
 
 | Method | Path | Who |
 | --- | --- | --- |
-| POST | `/api/auth/register` | public (always borrower) |
+| POST | `/api/auth/register` | public (always creates a borrower) |
 | POST | `/api/auth/login` | public |
-| GET | `/api/auth/me` | any authenticated |
+| GET | `/api/auth/me` | logged in |
 | PUT | `/api/borrower/profile` | borrower |
 | POST | `/api/borrower/salary-slip` | borrower |
-| GET | `/api/borrower/salary-slip` | borrower (file stream) |
-| GET | `/api/loans/calculate?principal=&tenureDays=` | public |
+| GET | `/api/borrower/salary-slip` | borrower |
+| GET | `/api/loans/calculate` | public |
 | POST | `/api/loans` | borrower |
 | GET | `/api/loans/me` | borrower |
-| GET | `/api/loans/:id` | owner, or sanction/disbursement/collection/admin |
+| GET | `/api/loans/:id` | owner, or ops roles |
+| GET | `/api/loans/:id/salary-slip` | owner, or ops roles |
 | PATCH | `/api/loans/:id/sanction` | sanction, admin |
 | PATCH | `/api/loans/:id/reject` | sanction, admin |
 | PATCH | `/api/loans/:id/disburse` | disbursement, admin |
-| GET | `/api/loans/:id/payments` | as GET loan |
+| GET | `/api/loans/:id/payments` | same as get loan |
 | POST | `/api/loans/:id/payments` | collection, admin |
 | GET | `/api/dashboard/sales/leads` | sales, admin |
 | GET | `/api/dashboard/sanction/loans` | sanction, admin |
@@ -222,48 +206,30 @@ Error: `{ "success": false, "message": "...", "errors?": [{ "field", "message" }
 | GET | `/api/dashboard/collection/loans` | collection, admin |
 | GET | `/api/dashboard/summary` | admin |
 
-## Design decisions
+A few choices I made while building this:
 
-1. **BRE on the server** so a modified client cannot skip eligibility.
-2. **Frontend may mirror BRE** so the borrower sees likely failures before submit.
-3. **Backend is authoritative** for auth, role, BRE, loan math, status, and payments.
-4. **Salary slips behind auth** because they are personal documents; a public `/uploads/...` URL would leak them.
-5. **loans and payments are separate collections** because payments are 1:N and UTR needs a global unique index.
-6. **UTR unique index** so two concurrent posts cannot insert the same reference even if the app-level check races.
-7. **Outstanding is stored** so collection and the borrower status page do not re-sum payments on every view, and auto-close is a simple `outstanding === 0`.
-8. **`applied` is the assignment's pending state** so the dashboard language matches the PDF (APPLIED → SANCTIONED → DISBURSED → CLOSED).
-9. **Transitions are centralized** in `loanService.transition()` with a role map. Controllers never set `status` directly.
-10. **Frontend vs backend RBAC**: hiding a nav item is UX. The API still returns 401/403 if the request is forged.
+- BRE and loan math live on the server so the UI cannot be trusted.
+- Loans and payments are separate collections because a loan can have many payments and UTR has to be unique globally.
+- Outstanding is stored on the loan so collection does not have to sum payments on every page load.
+- Status changes go through one `transition()` helper. Controllers do not set `status` by hand.
 
-## Local commands
+## Walkthrough
 
-```bash
-cd backend && npm run typecheck && npm run seed && npm run dev
-cd frontend && npm run build && npm run dev
-```
+If you want to click through the whole lifecycle:
 
-## Demo flow (for the 3–5 min video)
+1. Register a new borrower (or use `borrower-e2e@lms.com` after a fresh seed).
+2. Submit personal details that fail BRE (young age, salary 10000, bad PAN, unemployed) and check that all errors show up.
+3. Fix the details so BRE passes.
+4. Upload a small PDF or image.
+5. Move the sliders, confirm the interest panel, apply. Status should be applied.
+6. Log in as `sanction@lms.com`, open the application, look at the salary slip, approve.
+7. Log in as `disbursement@lms.com` and mark it disbursed.
+8. Log in as `collection@lms.com`. Record a partial payment, then the remaining amount. The loan should close.
+9. Try the same UTR again (should fail) and an amount larger than outstanding (should fail).
+10. As a borrower, `/dashboard` should send you back to `/apply`. As sales, you should not be able to open sanction.
 
-1. Register a new borrower (or use `borrower@lms.com` after resetting their profile).
-2. Personal details that fail BRE (age < 23, salary 10000, bad PAN, unemployed) — show all errors.
-3. Correct details so BRE passes.
-4. Upload a small PDF/JPG salary slip; show the authenticated preview.
-5. Move sliders; show live SI panel; Apply; status = `applied`.
-6. Log in as `sanction@lms.com` → Approve.
-7. Log in as `disbursement@lms.com` → Mark disbursed.
-8. Log in as `collection@lms.com` → record a partial payment, then a final payment; loan closes.
-9. Try the same UTR again (409) and an overpayment (422).
-10. Log in as the borrower; dashboard URL redirects to `/apply`. Log in as sales; sanction URL redirects away.
+## Things I did not build
 
-## Known limitations
+Salary slips sit on the API server disk, so this is not set up for multiple machines. Dashboard lists are not paginated. The JWT is kept in `localStorage`. There is no email, SMS, payment gateway, or refresh-token flow. Fine for the assignment, not something I would ship as-is.
 
-- Salary slips live on the API server disk (not object storage). Fine for the assignment; not multi-instance.
-- No pagination on dashboard lists (not required; queues stay small).
-- JWT is stored in `localStorage` plus a non-httpOnly presence cookie for the Next.js proxy. Backend JWT verification is still the security boundary.
-- No email/SMS, no payment gateway, no refresh-token rotation.
-
-## Repo hygiene
-
-- `.env` files are gitignored; commit `.env.example` only
-- `node_modules/`, `frontend/.next/`, `backend/dist/`, `backend/uploads/` are gitignored
-- No secrets in the repo
+`.env` files, `node_modules`, `frontend/.next`, `backend/dist`, `backend/uploads`, and local Mongo data are gitignored. Only the `.env.example` files are committed.
