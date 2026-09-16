@@ -1,6 +1,24 @@
-import 'dotenv/config';
+import fs from 'node:fs';
 import path from 'node:path';
+import dotenv from 'dotenv';
 import { z } from 'zod';
+
+const envFiles = [
+  path.resolve(process.cwd(), '.env'),
+  path.resolve(process.cwd(), 'backend', '.env'),
+  '/etc/secrets/.env',
+  '/etc/secrets/atlas-credentials.env',
+];
+
+for (const file of envFiles) {
+  if (fs.existsSync(file)) {
+    dotenv.config({ path: file, override: false });
+  }
+}
+
+if (!process.env.MONGODB_URI && process.env.MONGO_URI) {
+  process.env.MONGODB_URI = process.env.MONGO_URI;
+}
 
 const envSchema = z.object({
   PORT: z.coerce.number().int().positive().default(5000),
@@ -16,7 +34,12 @@ const parsed = envSchema.safeParse(process.env);
 
 if (!parsed.success) {
   const details = parsed.error.issues.map((i) => `  - ${i.path.join('.')}: ${i.message}`).join('\n');
+  const present = ['MONGODB_URI', 'MONGO_URI', 'JWT_SECRET', 'CLIENT_URL', 'NODE_ENV', 'PORT']
+    .map((key) => `${key}=${process.env[key] ? 'yes' : 'no'}`)
+    .join(', ');
   console.error(`Invalid environment configuration:\n${details}`);
+  console.error(`Keys present: ${present}`);
+  console.error('On Render: Environment -> Add Environment Variable. Key must be exactly MONGODB_URI.');
   process.exit(1);
 }
 
