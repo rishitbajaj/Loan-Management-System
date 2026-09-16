@@ -16,8 +16,18 @@ for (const file of envFiles) {
   }
 }
 
-if (!process.env.MONGODB_URI && process.env.MONGO_URI) {
-  process.env.MONGODB_URI = process.env.MONGO_URI;
+function unquote(value: string | undefined): string | undefined {
+  if (!value) return value;
+  return value.trim().replace(/^['"]|['"]$/g, '');
+}
+
+for (const key of ['MONGODB_URI', 'MONGODB_URL', 'MONGO_URI', 'JWT_SECRET', 'CLIENT_URL', 'UPLOAD_DIR']) {
+  const cleaned = unquote(process.env[key]);
+  if (cleaned !== undefined) process.env[key] = cleaned;
+}
+
+if (!process.env.MONGODB_URI) {
+  process.env.MONGODB_URI = process.env.MONGODB_URL || process.env.MONGO_URI;
 }
 
 const envSchema = z.object({
