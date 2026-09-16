@@ -1,12 +1,9 @@
 'use client';
 
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import type { ReactNode } from 'react';
-import { AppHeader } from '@/components/AppHeader';
+import { useState, type ReactNode } from 'react';
+import { Topbar } from '@/components/Topbar';
 import { RequireRole } from '@/components/RequireRole';
-import { useAuth } from '@/lib/auth';
-import { modulesForRole } from '@/lib/rbac';
+import { Sidebar } from '@/components/Sidebar';
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   return (
@@ -17,43 +14,46 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 }
 
 function DashboardShell({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
-  const pathname = usePathname();
-  const modules = user ? modulesForRole(user.role) : [];
+  const [menuOpen, setMenuOpen] = useState(false);
 
   return (
-    <div className="flex min-h-full flex-1 flex-col">
-      <AppHeader subtitle="Operations dashboard" />
-      <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-6 sm:px-6 lg:flex-row">
-        <aside className="lg:w-56">
-          <nav className="flex gap-2 overflow-x-auto lg:flex-col">
-            {user?.role === 'admin' && (
-              <NavLink href="/dashboard" active={pathname === '/dashboard'}>
-                Overview
-              </NavLink>
-            )}
-            {modules.map((m) => (
-              <NavLink key={m.key} href={m.href} active={pathname.startsWith(m.href)}>
-                {m.label}
-              </NavLink>
-            ))}
-          </nav>
-        </aside>
-        <div className="min-w-0 flex-1">{children}</div>
+    <div className="min-h-screen bg-[var(--background)]">
+      <aside className="fixed inset-y-0 left-0 z-40 hidden w-[var(--sidebar-width)] border-r border-[var(--border)] bg-[var(--surface)] lg:block">
+        <Sidebar />
+      </aside>
+
+      <div className="lg:pl-[var(--sidebar-width)]">
+        <Topbar variant="dashboard" onMenu={() => setMenuOpen(true)} />
+
+        {menuOpen && (
+          <>
+            <div
+              className="animate-overlay fixed inset-0 z-50 bg-[rgba(15,23,42,0.35)] lg:hidden"
+              onClick={() => setMenuOpen(false)}
+              aria-hidden
+            />
+            <div className="animate-panel fixed inset-y-0 left-0 z-[60] flex w-[280px] max-w-[85vw] flex-col border-r border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-lg)] lg:hidden">
+              <div className="flex justify-end px-4 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setMenuOpen(false)}
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-[var(--radius-md)] text-[var(--text-muted)] hover:bg-[var(--background)]"
+                  aria-label="Close menu"
+                >
+                  <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden>
+                    <path d="M4 4l10 10M14 4L4 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                  </svg>
+                </button>
+              </div>
+              <Sidebar onNavigate={() => setMenuOpen(false)} />
+            </div>
+          </>
+        )}
+
+        <main className="mx-auto w-full max-w-[var(--content-max-width)] overflow-x-hidden px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+          {children}
+        </main>
       </div>
     </div>
-  );
-}
-
-function NavLink({ href, active, children }: { href: string; active: boolean; children: ReactNode }) {
-  return (
-    <Link
-      href={href}
-      className={`whitespace-nowrap rounded-md px-3 py-2 text-sm font-medium ${
-        active ? 'bg-indigo-600 text-white' : 'text-slate-700 hover:bg-slate-100'
-      }`}
-    >
-      {children}
-    </Link>
   );
 }
