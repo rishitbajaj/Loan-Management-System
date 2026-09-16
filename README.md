@@ -238,6 +238,8 @@ Salary slips sit on the API server disk, so this is not set up for multiple mach
 
 The API goes on Render. The Next.js app goes on Vercel. MongoDB has to be Atlas (or any Mongo that Render can reach). Local Mongo on your laptop will not work from Render.
 
+If Render fails with `Could not read package.json` at `/opt/render/project/src/package.json`, the Root Directory is blank. Either leave it blank (this repo now has a root `package.json` that builds `backend/`) or set Root Directory to `backend`.
+
 ### 1. MongoDB Atlas
 
 Use an Atlas cluster. In Network Access, allow `0.0.0.0/0` so Render can connect. Copy the connection string.
