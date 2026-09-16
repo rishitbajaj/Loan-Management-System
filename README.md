@@ -233,3 +233,73 @@ If you want to click through the whole lifecycle:
 Salary slips sit on the API server disk, so this is not set up for multiple machines. Dashboard lists are not paginated. The JWT is kept in `localStorage`. There is no email, SMS, payment gateway, or refresh-token flow. Fine for the assignment, not something I would ship as-is.
 
 `.env` files, `node_modules`, `frontend/.next`, `backend/dist`, `backend/uploads`, and local Mongo data are gitignored. Only the `.env.example` files are committed.
+
+## Deploy (Render + Vercel)
+
+The API goes on Render. The Next.js app goes on Vercel. MongoDB has to be Atlas (or any Mongo that Render can reach). Local Mongo on your laptop will not work from Render.
+
+### 1. MongoDB Atlas
+
+Use an Atlas cluster. In Network Access, allow `0.0.0.0/0` so Render can connect. Copy the connection string.
+
+### 2. Render (backend)
+
+1. Go to https://dashboard.render.com and create a new Web Service from this GitHub repo.
+2. Root directory: `backend`
+3. Build command: `npm install && npm run build`
+4. Start command: `npm start`
+5. Health check path: `/api/health`
+
+Environment variables:
+
+| Key | Value |
+| --- | --- |
+| `NODE_ENV` | `production` |
+| `MONGODB_URI` | your Atlas URI |
+| `JWT_SECRET` | a long random string |
+| `CLIENT_URL` | your Vercel URL, for example `https://something.vercel.app` |
+| `JWT_EXPIRES_IN` | `1d` |
+| `UPLOAD_DIR` | `uploads` |
+
+Render sets `PORT` for you. Do not hardcode it.
+
+After the first successful deploy, open the Render shell and seed the demo accounts:
+
+```bash
+node dist/scripts/seed.js
+```
+
+The public API URL will look like `https://lms-api.onrender.com`. Health check: `https://lms-api.onrender.com/api/health`
+
+Note: salary slips are stored on disk. On the free Render plan that disk is wiped when the instance restarts, so uploaded files can disappear after sleep or redeploy. Seed data can be recreated by running seed again.
+
+### 3. Vercel (frontend)
+
+1. Go to https://vercel.com/new and import this GitHub repo.
+2. Root directory: `frontend`
+3. Framework: Next.js (it should detect this)
+
+Environment variable:
+
+| Key | Value |
+| --- | --- |
+| `NEXT_PUBLIC_API_URL` | `https://YOUR-RENDER-SERVICE.onrender.com/api` |
+
+Deploy. Copy the Vercel URL, put it in Render as `CLIENT_URL`, and redeploy the API if you had a placeholder there.
+
+If you add a custom domain later, add that origin to `CLIENT_URL` as well. You can pass more than one, comma separated:
+
+```
+CLIENT_URL=https://your-app.vercel.app,https://www.your-domain.com
+```
+
+Preview URLs on `*.vercel.app` are already allowed by the API.
+
+### Order that actually works
+
+1. Create the Render service with `CLIENT_URL=http://localhost:3000` for a minute, just so it boots.
+2. Create the Vercel project pointing at the Render API URL.
+3. Update Render `CLIENT_URL` to the Vercel origin and save (that restarts the API).
+4. Seed from the Render shell.
+
+Free Render services sleep after idle time. The first request after that can take 30 to 60 seconds.

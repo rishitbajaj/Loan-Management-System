@@ -8,7 +8,7 @@ const envSchema = z.object({
   MONGODB_URI: z.string().min(1, 'MONGODB_URI is required'),
   JWT_SECRET: z.string().min(16, 'JWT_SECRET must be at least 16 characters'),
   JWT_EXPIRES_IN: z.string().default('1d'),
-  CLIENT_URL: z.url({ message: 'CLIENT_URL must be a valid URL' }),
+  CLIENT_URL: z.string().min(1, 'CLIENT_URL is required'),
   UPLOAD_DIR: z.string().default('uploads'),
 });
 
@@ -20,8 +20,22 @@ if (!parsed.success) {
   process.exit(1);
 }
 
+const clientOrigins = parsed.data.CLIENT_URL.split(',')
+  .map((value) => value.trim())
+  .filter(Boolean);
+
+for (const origin of clientOrigins) {
+  try {
+    new URL(origin);
+  } catch {
+    console.error(`Invalid CLIENT_URL origin: ${origin}`);
+    process.exit(1);
+  }
+}
+
 export const env = {
   ...parsed.data,
+  clientOrigins,
   isProduction: parsed.data.NODE_ENV === 'production',
   salarySlipDir: path.resolve(process.cwd(), parsed.data.UPLOAD_DIR, 'salary-slips'),
 };

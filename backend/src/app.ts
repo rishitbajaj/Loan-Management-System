@@ -8,8 +8,36 @@ import { apiRouter } from './routes';
 export const app = express();
 
 app.disable('x-powered-by');
+app.set('trust proxy', 1);
 app.use(helmet());
-app.use(cors({ origin: env.CLIENT_URL, credentials: true }));
+
+const allowedOrigins = new Set(env.clientOrigins);
+
+app.use(
+  cors({
+    origin(origin, callback) {
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+      if (allowedOrigins.has(origin)) {
+        callback(null, true);
+        return;
+      }
+      try {
+        const { protocol, hostname } = new URL(origin);
+        if (protocol === 'https:' && hostname.endsWith('.vercel.app')) {
+          callback(null, true);
+          return;
+        }
+      } catch {
+        // fall through
+      }
+      callback(null, false);
+    },
+    credentials: true,
+  }),
+);
 app.use(express.json({ limit: '100kb' }));
 
 app.use('/api', apiRouter);
