@@ -327,8 +327,7 @@ function buildLoanDocument(
   };
 }
 
-async function seed(): Promise<void> {
-  await connectDb();
+export async function seedDatabase(): Promise<void> {
   const passwordHash = await hashPassword(SEED_PASSWORD);
 
   for (const account of SEED_ACCOUNTS) {
@@ -421,12 +420,22 @@ async function seed(): Promise<void> {
   console.log('  borrower-disbursed@lms.com → disbursed partial (collection + history)');
   console.log('  borrower-rejected@lms.com  → rejected');
   console.log('  borrower-e2e@lms.com       → applied (full pipeline E2E smoke)');
-
-  await disconnectDb();
 }
 
-seed().catch(async (err) => {
-  console.error('Seed failed', err);
-  await disconnectDb();
-  process.exit(1);
-});
+async function runCli(): Promise<void> {
+  await connectDb();
+  try {
+    await seedDatabase();
+  } finally {
+    await disconnectDb();
+  }
+}
+
+const startedAsCli = (process.argv[1] ?? '').includes('seed');
+if (startedAsCli) {
+  runCli().catch(async (err) => {
+    console.error('Seed failed', err);
+    await disconnectDb();
+    process.exit(1);
+  });
+}
