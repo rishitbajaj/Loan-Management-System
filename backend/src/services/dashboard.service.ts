@@ -21,7 +21,15 @@ export interface SalesLead {
 export async function listSalesLeads(): Promise<SalesLead[]> {
   return User.aggregate<SalesLead>([
     { $match: { role: 'borrower' } },
-    { $lookup: { from: 'loans', localField: '_id', foreignField: 'borrower', as: 'loans' } },
+    {
+      $lookup: {
+        from: 'loans',
+        localField: '_id',
+        foreignField: 'borrower',
+        pipeline: [{ $project: { _id: 1 } }, { $limit: 1 }],
+        as: 'loans',
+      },
+    },
     { $match: { loans: { $size: 0 } } },
     {
       $project: {

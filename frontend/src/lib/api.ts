@@ -54,7 +54,15 @@ export function setUnauthorizedHandler(handler: (() => void) | null): void {
   onUnauthorized = handler;
 }
 
-async function request<T>(path: string, options: RequestOptions = {}): Promise<ApiResult<T>> {
+const inflightGets = new Map<string, Promise<ApiResult<unknown>>>();
+let meCache: { token: string; result: ApiResult<unknown>; expires: number } | null = null;
+const ME_CACHE_MS = 2500;
+
+function clearVolatileCache(): void {
+  meCache = null;
+}
+
+async function executeRequest<T>(path: string, options: RequestOptions = {}): Promise<ApiResult<T>> {
   const headers: Record<string, string> = {};
   const token = getToken();
   if (token) headers.Authorization = `Bearer ${token}`;
@@ -80,13 +88,44 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<A
     | null;
 
   if (!response.ok || !payload || !payload.success) {
-    if (response.status === 401 && token) onUnauthorized?.();
+    if (response.status === 401 && token) {
+      clearVolatileCache();
+      onUnauthorized?.();
+    }
     const message = payload && !payload.success ? payload.message : `Request failed (${response.status})`;
     const errors = payload && !payload.success ? payload.errors ?? [] : [];
     throw new ApiError(response.status, message, errors);
   }
 
   return { data: payload.data, message: payload.message };
+}
+
+async function request<T>(path: string, options: RequestOptions = {}): Promise<ApiResult<T>> {
+  const method = options.method ?? 'GET';
+  if (method !== 'GET') clearVolatileCache();
+
+  if (method === 'GET' && !options.body && !options.formData) {
+    const token = getToken() ?? '';
+    if (path === '/auth/me' && meCache && meCache.token === token && meCache.expires > Date.now()) {
+      return meCache.result as ApiResult<T>;
+    }
+
+    const key = `${token}:${path}`;
+    const existing = inflightGets.get(key);
+    if (existing) return existing as Promise<ApiResult<T>>;
+
+    const pending = executeRequest<T>(path, options).then((result) => {
+      if (path === '/auth/me') {
+        meCache = { token, result, expires: Date.now() + ME_CACHE_MS };
+      }
+      return result;
+    });
+    inflightGets.set(key, pending as Promise<ApiResult<unknown>>);
+    void pending.finally(() => inflightGets.delete(key));
+    return pending;
+  }
+
+  return executeRequest<T>(path, options);
 }
 
 export const api = {

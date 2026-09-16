@@ -75,5 +75,6 @@ const loanSchema = new Schema<ILoan>(
 );
 
 loanSchema.index({ borrower: 1, status: 1 });
+loanSchema.index({ status: 1, updatedAt: -1 });
 
 export const Loan = model<ILoan>('Loan', loanSchema);

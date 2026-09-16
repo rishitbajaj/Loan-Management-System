@@ -18,8 +18,10 @@ export async function disbursementQueue(_req: Request, res: Response): Promise<v
   sendSuccess(res, { loans });
 }
 
-export async function collectionQueue(_req: Request, res: Response): Promise<void> {
-  const loans = await loanService.listLoansByStatus(['disbursed', 'closed']);
+export async function collectionQueue(req: Request, res: Response): Promise<void> {
+  const status = typeof req.query.status === 'string' ? req.query.status : undefined;
+  const statuses = status === 'disbursed' ? (['disbursed'] as const) : (['disbursed', 'closed'] as const);
+  const loans = await loanService.listLoansByStatus([...statuses]);
   sendSuccess(res, { loans });
 }
 

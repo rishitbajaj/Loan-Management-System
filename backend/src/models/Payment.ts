@@ -14,7 +14,7 @@ export type PaymentDocument = HydratedDocument<IPayment>;
 
 const paymentSchema = new Schema<IPayment>(
   {
-    loan: { type: Schema.Types.ObjectId, ref: 'Loan', required: true, index: true },
+    loan: { type: Schema.Types.ObjectId, ref: 'Loan', required: true },
     utr: { type: String, required: true, unique: true, uppercase: true, trim: true },
     amount: { type: Number, required: true, min: 0.01 },
     paidOn: { type: Date, required: true },
@@ -30,5 +30,7 @@ const paymentSchema = new Schema<IPayment>(
     },
   },
 );
+
+paymentSchema.index({ loan: 1, paidOn: -1 });
 
 export const Payment = model<IPayment>('Payment', paymentSchema);

@@ -7,14 +7,22 @@ import { buildSalarySlipPdf } from '../utils/salarySlipPdf';
 import type { ProfileInput } from '../validation/borrower.schema';
 import { runBre, type BreResult } from './bre.service';
 
-async function getBorrower(userId: string): Promise<UserDocument> {
+async function getBorrower(userId: string, known?: UserDocument): Promise<UserDocument> {
+  if (known && String(known._id) === userId) {
+    if (known.role !== 'borrower') throw AppError.notFound('Borrower not found');
+    return known;
+  }
   const user = await User.findById(userId);
   if (!user || user.role !== 'borrower') throw AppError.notFound('Borrower not found');
   return user;
 }
 
-export async function updateProfile(userId: string, input: ProfileInput): Promise<{ user: UserDocument; bre: BreResult }> {
-  const user = await getBorrower(userId);
+export async function updateProfile(
+  userId: string,
+  input: ProfileInput,
+  known?: UserDocument,
+): Promise<{ user: UserDocument; bre: BreResult }> {
+  const user = await getBorrower(userId, known);
   const bre = runBre(input);
 
   user.profile = {
@@ -32,8 +40,8 @@ export async function updateProfile(userId: string, input: ProfileInput): Promis
   return { user, bre };
 }
 
-export async function saveSalarySlip(userId: string, file: Express.Multer.File): Promise<UserDocument> {
-  const user = await getBorrower(userId);
+export async function saveSalarySlip(userId: string, file: Express.Multer.File, known?: UserDocument): Promise<UserDocument> {
+  const user = await getBorrower(userId, known);
   const previous = user.profile?.salarySlip?.path;
 
   const slip: ISalarySlip = {
@@ -111,8 +119,8 @@ async function materializeSeedPdf(user: UserDocument, slip: ISalarySlip): Promis
   return slipPayload(slip, dest);
 }
 
-export async function getSalarySlip(userId: string): Promise<ISalarySlip> {
-  const user = await getBorrower(userId);
+export async function getSalarySlip(userId: string, known?: UserDocument): Promise<ISalarySlip> {
+  const user = await getBorrower(userId, known);
   const slip = user.profile?.salarySlip;
   if (!slip) throw AppError.notFound('No salary slip uploaded yet');
 

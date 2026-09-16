@@ -1,11 +1,10 @@
 import type { Metadata } from 'next';
-import { Geist, Inter } from 'next/font/google';
+import { Inter } from 'next/font/google';
 import { ToastProvider } from '@/components/ui/Toast';
 import { AuthProvider } from '@/lib/auth';
 import './globals.css';
 
-const geist = Geist({ variable: '--font-geist-sans', subsets: ['latin'] });
-const inter = Inter({ variable: '--font-inter', subsets: ['latin'] });
+const inter = Inter({ variable: '--font-inter', subsets: ['latin'], display: 'swap' });
 
 export const metadata: Metadata = {
   title: 'CreditSea LMS | Loan Management Platform',
@@ -18,7 +17,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<'/'>) {
   return (
-    <html lang="en" className={`${geist.variable} ${inter.variable} h-full antialiased`}>
+    <html lang="en" className={`${inter.variable} h-full antialiased`}>
       <body className="flex min-h-full flex-col bg-[var(--background)] text-[var(--text-primary)]">
         <AuthProvider>
           <ToastProvider>{children}</ToastProvider>

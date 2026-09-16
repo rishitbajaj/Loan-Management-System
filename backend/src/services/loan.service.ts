@@ -1,6 +1,6 @@
 import { Types } from 'mongoose';
 import { Loan, type LoanDocument } from '../models/Loan';
-import { User, type ISalarySlip } from '../models/User';
+import { User, type ISalarySlip, type UserDocument } from '../models/User';
 import { ACTIVE_LOAN_STATUSES, type AuthUser, type LoanStatus, type Role } from '../types';
 import { AppError } from '../utils/AppError';
 import { calculateLoan } from '../utils/loanMath';
@@ -8,7 +8,7 @@ import type { LoanTermsInput } from '../validation/loan.schema';
 import * as borrowerService from './borrower.service';
 
 export const BORROWER_FIELDS =
-  'name email profile.fullName profile.pan profile.dob profile.monthlySalary profile.employmentMode profile.breStatus profile.breFailures profile.salarySlip';
+  'name email role profile.fullName profile.pan profile.dob profile.monthlySalary profile.employmentMode profile.breStatus profile.breFailures profile.salarySlip';
 
 const TRANSITIONS: Record<LoanStatus, Partial<Record<LoanStatus, Role[]>>> = {
   applied: { sanctioned: ['sanction', 'admin'], rejected: ['sanction', 'admin'] },
@@ -97,12 +97,13 @@ export async function disburseLoan(loanId: string, actor: AuthUser): Promise<Loa
 
 export async function listLoansByStatus(statuses: LoanStatus[]): Promise<LoanDocument[]> {
   return Loan.find({ status: { $in: statuses } })
+    .select('-statusHistory -__v')
     .populate('borrower', BORROWER_FIELDS)
     .sort({ updatedAt: -1 });
 }
 
-export async function createLoan(borrower: AuthUser, terms: LoanTermsInput): Promise<LoanDocument> {
-  const user = await User.findById(borrower.id);
+export async function createLoan(borrower: AuthUser, terms: LoanTermsInput, known?: UserDocument): Promise<LoanDocument> {
+  const user = known && String(known._id) === borrower.id ? known : await User.findById(borrower.id);
   if (!user || user.role !== 'borrower') throw AppError.notFound('Borrower not found');
 
   if (user.profile?.breStatus !== 'passed') {
@@ -145,5 +146,6 @@ export async function getLoanForUser(loanId: string, user: AuthUser): Promise<Lo
 
 export async function getSalarySlipForLoan(loanId: string, user: AuthUser): Promise<ISalarySlip> {
   const loan = await getLoanForUser(loanId, user);
-  return borrowerService.getSalarySlip(borrowerIdOf(loan));
+  const populated = loan.populated('borrower') ? (loan.borrower as unknown as UserDocument) : undefined;
+  return borrowerService.getSalarySlip(borrowerIdOf(loan), populated);
 }

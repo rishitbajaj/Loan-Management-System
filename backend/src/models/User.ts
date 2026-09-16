@@ -63,7 +63,7 @@ const userSchema = new Schema<IUser>(
     name: { type: String, required: true, trim: true },
     email: { type: String, required: true, unique: true, lowercase: true, trim: true, index: true },
     passwordHash: { type: String, required: true },
-    role: { type: String, enum: ROLES, required: true, default: 'borrower', index: true },
+    role: { type: String, enum: ROLES, required: true, default: 'borrower' },
     profile: { type: borrowerProfileSchema },
   },
   {
@@ -81,5 +81,7 @@ const userSchema = new Schema<IUser>(
     },
   },
 );
+
+userSchema.index({ role: 1, createdAt: -1 });
 
 export const User = model<IUser>('User', userSchema);

@@ -14,7 +14,7 @@ export function calculate(req: Request, res: Response): void {
 export async function create(req: Request, res: Response): Promise<void> {
   const user = requireUser(req);
   const terms = loanTermsSchema.parse(req.body);
-  const loan = await loanService.createLoan(user, terms);
+  const loan = await loanService.createLoan(user, terms, req.userDoc);
   sendCreated(res, { loan }, 'Loan application submitted');
 }
 

@@ -1,7 +1,6 @@
 'use client';
 
 import { ApplicationSubmittedModal } from '@/components/borrower/ApplicationSubmittedModal';
-import { CompareTenuresModal } from '@/components/borrower/CompareTenuresModal';
 import { LoanEstimatedRepayment } from '@/components/borrower/LoanEstimatedRepayment';
 import { LoanInsightsStrip } from '@/components/borrower/LoanInsightsStrip';
 import { LoanReviewModal } from '@/components/borrower/LoanReviewModal';
@@ -23,8 +22,13 @@ import {
   todayCalendarDate,
 } from '@/lib/loanMath';
 import type { Loan } from '@/lib/types';
+import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
+
+const CompareTenuresModal = dynamic(
+  () => import('@/components/borrower/CompareTenuresModal').then((mod) => mod.CompareTenuresModal),
+);
 
 const SLIDER_CLASS =
   'mt-2.5 h-2 w-full cursor-pointer appearance-none rounded-full bg-[var(--border-light)] accent-[var(--primary)] [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[var(--primary)] [&::-webkit-slider-thumb]:shadow-sm';
@@ -182,14 +186,16 @@ export default function LoanConfigPage() {
 
       <LoanInsightsStrip plan={plan} monthlyIncome={monthlyIncome} onCompareTenures={() => setCompareOpen(true)} />
 
-      <CompareTenuresModal
-        open={compareOpen}
-        onClose={() => setCompareOpen(false)}
-        principal={principal}
-        selectedTenure={tenureDays}
-        startDate={startDate}
-        tenures={COMPARE_TENURE_OPTIONS}
-      />
+      {compareOpen ? (
+        <CompareTenuresModal
+          open={compareOpen}
+          onClose={() => setCompareOpen(false)}
+          principal={principal}
+          selectedTenure={tenureDays}
+          startDate={startDate}
+          tenures={COMPARE_TENURE_OPTIONS}
+        />
+      ) : null}
 
       <LoanReviewModal
         open={reviewOpen}

@@ -37,7 +37,9 @@ function ActiveLoansEmptyIcon() {
 export default function ActiveLoansPage() {
   const { user } = useAuth();
   const router = useRouter();
-  const { data, error, loading, refresh } = useDashboardQuery<{ loans: Loan[] }>('/dashboard/collection/loans');
+  const { data, error, loading, refresh } = useDashboardQuery<{ loans: Loan[] }>(
+    '/dashboard/collection/loans?status=disbursed',
+  );
 
   const activeLoans = useMemo(
     () => (data?.loans ?? []).filter((loan) => loan.status === 'disbursed'),

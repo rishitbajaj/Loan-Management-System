@@ -20,7 +20,7 @@ export default function ProfileLayout({ children }: { children: ReactNode }) {
     else if (!ROLES.includes(user.role)) router.replace('/login');
   }, [loading, user, router]);
 
-  if (loading || !user) return <PageLoader />;
+  if (!user) return <PageLoader />;
 
   if (isExecutive(user.role)) {
     return (
