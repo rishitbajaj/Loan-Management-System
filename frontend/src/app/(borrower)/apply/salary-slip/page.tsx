@@ -2,11 +2,12 @@
 
 import { useBorrower } from '@/components/borrower/BorrowerContext';
 import { BorrowerPageIntro, FormActions } from '@/components/borrower/BorrowerPageIntro';
+import { SalarySlipDocumentRow } from '@/components/borrower/SalarySlipPreviewModal';
 import { Alert, Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { PageLoader } from '@/components/ui/Spinner';
 import { useToast } from '@/components/ui/Toast';
-import { api, ApiError, errorMessage, fetchBlob } from '@/lib/api';
+import { api, ApiError, errorMessage } from '@/lib/api';
 import { incomeProofDescription, incomeProofUploadLabel } from '@/lib/employment-labels';
 import { formatBytes } from '@/lib/format';
 import type { UserDetail } from '@/lib/types';
@@ -47,7 +48,6 @@ export default function SalarySlipPage() {
   const { success } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -58,23 +58,6 @@ export default function SalarySlipPage() {
     if (activeLoan) router.replace('/apply/status');
     else if (!canAccess('salary-slip')) router.replace('/apply/personal-details');
   }, [loading, activeLoan, canAccess, router]);
-
-  useEffect(() => {
-    if (!me?.profile?.salarySlip) return;
-    let revoked = false;
-    let url: string | null = null;
-    fetchBlob('/borrower/salary-slip')
-      .then((blob) => {
-        if (revoked) return;
-        url = URL.createObjectURL(blob);
-        setPreviewUrl(url);
-      })
-      .catch(() => undefined);
-    return () => {
-      revoked = true;
-      if (url) URL.revokeObjectURL(url);
-    };
-  }, [me?.profile?.salarySlip?.originalName, me?.profile?.salarySlip?.size]);
 
   function takeFile(next: File | null) {
     setFile(next);
@@ -131,7 +114,6 @@ export default function SalarySlipPage() {
 
   const employmentMode = me?.profile?.employmentMode;
   const slip = me?.profile?.salarySlip;
-  const isImage = slip?.mimeType.startsWith('image/');
   const showPending = !!file;
   const uploadComplete = (!!slip || justUploaded) && !showPending;
   const showUploaded = !!slip && !showPending;
@@ -157,12 +139,15 @@ export default function SalarySlipPage() {
           )}
 
           {showUploaded && slip && !showPending && (
-            <FilePreviewRow
-              name={slip.originalName}
-              type={mimeLabel(slip.mimeType)}
-              size={formatBytes(slip.size)}
-              onReplace={openFilePicker}
-            />
+            <>
+              <FilePreviewRow
+                name={slip.originalName}
+                type={mimeLabel(slip.mimeType)}
+                size={formatBytes(slip.size)}
+                onReplace={openFilePicker}
+              />
+              <SalarySlipDocumentRow slip={slip} />
+            </>
           )}
 
           {!showPending && !showUploaded && (
@@ -183,16 +168,6 @@ export default function SalarySlipPage() {
               <Button type="button" variant="secondary" size="sm" className="mt-5" onClick={openFilePicker}>
                 Choose document
               </Button>
-            </div>
-          )}
-
-          {showUploaded && previewUrl && (
-            <div className="overflow-hidden rounded-[var(--radius-xl)] border border-[var(--border)] bg-[var(--surface)]">
-              {isImage ? (
-                <img src={previewUrl} alt="Income proof preview" className="max-h-64 w-full object-contain" />
-              ) : (
-                <iframe title="Income proof" src={previewUrl} className="h-64 w-full" />
-              )}
             </div>
           )}
 

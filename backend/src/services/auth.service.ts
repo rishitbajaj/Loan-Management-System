@@ -17,6 +17,25 @@ export function toAuthUser(user: UserDocument): AuthUser {
   return { id: user.id, name: user.name, email: user.email, role: user.role };
 }
 
+export function toPublicUser(user: UserDocument) {
+  const json = user.toJSON() as {
+    _id: unknown;
+    name: string;
+    email: string;
+    role: Role;
+    createdAt?: Date;
+    profile?: unknown;
+  };
+  return {
+    _id: json._id,
+    name: json.name,
+    email: json.email,
+    role: json.role,
+    createdAt: json.createdAt,
+    ...(json.role === 'borrower' && json.profile ? { profile: json.profile } : {}),
+  };
+}
+
 export function signToken(user: UserDocument): string {
   const payload: JwtPayload = { sub: user.id, role: user.role };
   const options: SignOptions = { expiresIn: env.JWT_EXPIRES_IN as SignOptions['expiresIn'] };

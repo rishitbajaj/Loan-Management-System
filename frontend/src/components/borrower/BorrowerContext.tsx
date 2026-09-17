@@ -1,9 +1,10 @@
 'use client';
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { api, errorMessage } from '@/lib/api';
+import { api, errorMessage, isAbortError, peekCachedGet } from '@/lib/api';
 import { requiresIncomeProof } from '@/lib/employment-labels';
 import type { Loan, UserDetail } from '@/lib/types';
+import { usePathname } from 'next/navigation';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 export type BorrowerStep = 'personal-details' | 'salary-slip' | 'loan' | 'status';
 
@@ -14,7 +15,7 @@ interface BorrowerState {
   latestLoan: Loan | null;
   loading: boolean;
   error: string | null;
-  refresh: () => Promise<void>;
+  refresh: (opts?: { fresh?: boolean }) => Promise<void>;
   nextStep: BorrowerStep;
   canAccess: (step: BorrowerStep) => boolean;
 }
@@ -24,27 +25,43 @@ const BorrowerContext = createContext<BorrowerState | null>(null);
 const ACTIVE = new Set(['applied', 'sanctioned', 'disbursed']);
 
 export function BorrowerProvider({ children }: { children: ReactNode }) {
-  const [me, setMe] = useState<UserDetail | null>(null);
-  const [loans, setLoans] = useState<Loan[]>([]);
-  const [loading, setLoading] = useState(true);
+  const pathname = usePathname();
+  const cachedMe = peekCachedGet<{ user: UserDetail }>('/auth/me');
+  const cachedLoans = peekCachedGet<{ loans: Loan[] }>('/loans/me');
+  const [me, setMe] = useState<UserDetail | null>(cachedMe?.data.user ?? null);
+  const [loans, setLoans] = useState<Loan[]>(cachedLoans?.data.loans ?? []);
+  const [loading, setLoading] = useState(!(cachedMe && cachedLoans));
   const [error, setError] = useState<string | null>(null);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (opts?: { fresh?: boolean; signal?: AbortSignal }) => {
     try {
-      const [meRes, loansRes] = await Promise.all([api.get<{ user: UserDetail }>('/auth/me'), api.get<{ loans: Loan[] }>('/loans/me')]);
+      const cachedMe = !opts?.fresh ? peekCachedGet<{ user: UserDetail }>('/auth/me') : null;
+      const [meRes, loansRes] = await Promise.all([
+        cachedMe
+          ? Promise.resolve(cachedMe)
+          : api.get<{ user: UserDetail }>('/auth/me', { fresh: opts?.fresh, signal: opts?.signal }),
+        api.get<{ loans: Loan[] }>('/loans/me', { fresh: true, signal: opts?.signal }),
+      ]);
+      if (opts?.signal?.aborted) return;
       setMe(meRes.data.user);
       setLoans(loansRes.data.loans);
       setError(null);
     } catch (err) {
+      if (isAbortError(err) || opts?.signal?.aborted) return;
       setError(errorMessage(err));
     } finally {
-      setLoading(false);
+      if (!opts?.signal?.aborted) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    void refresh();
-  }, [refresh]);
+    const controller = new AbortController();
+    const hasMe = !!peekCachedGet<{ user: UserDetail }>('/auth/me');
+    const hasLoans = !!peekCachedGet<{ loans: Loan[] }>('/loans/me');
+    if (hasMe && hasLoans) setLoading(false);
+    void refresh({ fresh: false, signal: controller.signal });
+    return () => controller.abort();
+  }, [refresh, pathname]);
 
   const value = useMemo<BorrowerState>(() => {
     const activeLoan = loans.find((l) => ACTIVE.has(l.status)) ?? null;

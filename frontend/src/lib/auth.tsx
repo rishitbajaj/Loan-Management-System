@@ -1,8 +1,8 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { api, setUnauthorizedHandler, TOKEN_KEY, USER_KEY } from './api';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { api, clearApiCache, isAbortError, setUnauthorizedHandler, TOKEN_KEY, USER_KEY } from './api';
 import type { AuthUser, Role } from './types';
 
 export const ROLE_COOKIE = 'lms_role';
@@ -18,6 +18,17 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+const authListeners = new Set<() => void>();
+
+function emitAuth(): void {
+  authListeners.forEach((listener) => listener());
+}
+
+function subscribeAuth(onStoreChange: () => void): () => void {
+  authListeners.add(onStoreChange);
+  return () => authListeners.delete(onStoreChange);
+}
+
 function writeCookie(name: string, value: string, maxAgeSeconds: number): void {
   document.cookie = `${name}=${encodeURIComponent(value)}; path=/; max-age=${maxAgeSeconds}; samesite=lax`;
 }
@@ -26,33 +37,48 @@ function clearCookie(name: string): void {
   document.cookie = `${name}=; path=/; max-age=0`;
 }
 
-function readStoredUser(): AuthUser | null {
+let cachedRaw: string | null = null;
+let cachedUser: AuthUser | null = null;
+
+function getAuthSnapshot(): AuthUser | null {
+  const raw = window.localStorage.getItem(USER_KEY);
+  if (raw === cachedRaw) return cachedUser;
+  cachedRaw = raw;
   try {
-    const raw = window.localStorage.getItem(USER_KEY);
-    return raw ? (JSON.parse(raw) as AuthUser) : null;
+    cachedUser = raw ? (JSON.parse(raw) as AuthUser) : null;
   } catch {
-    return null;
+    cachedUser = null;
   }
+  return cachedUser;
+}
+
+function getAuthServerSnapshot(): AuthUser | null {
+  return null;
+}
+
+function writeSession(token: string | null, nextUser: AuthUser | null): void {
+  if (token && nextUser) {
+    window.localStorage.setItem(TOKEN_KEY, token);
+    window.localStorage.setItem(USER_KEY, JSON.stringify(nextUser));
+    writeCookie(TOKEN_COOKIE, '1', 60 * 60 * 24);
+    writeCookie(ROLE_COOKIE, nextUser.role, 60 * 60 * 24);
+  } else {
+    window.localStorage.removeItem(TOKEN_KEY);
+    window.localStorage.removeItem(USER_KEY);
+    clearCookie(TOKEN_COOKIE);
+    clearCookie(ROLE_COOKIE);
+    clearApiCache();
+  }
+  emitAuth();
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [loading, setLoading] = useState(true);
+  const user = useSyncExternalStore(subscribeAuth, getAuthSnapshot, getAuthServerSnapshot);
+  const [sessionChecked, setSessionChecked] = useState(false);
 
   const persist = useCallback((token: string | null, nextUser: AuthUser | null) => {
-    if (token && nextUser) {
-      window.localStorage.setItem(TOKEN_KEY, token);
-      window.localStorage.setItem(USER_KEY, JSON.stringify(nextUser));
-      writeCookie(TOKEN_COOKIE, '1', 60 * 60 * 24);
-      writeCookie(ROLE_COOKIE, nextUser.role, 60 * 60 * 24);
-    } else {
-      window.localStorage.removeItem(TOKEN_KEY);
-      window.localStorage.removeItem(USER_KEY);
-      clearCookie(TOKEN_COOKIE);
-      clearCookie(ROLE_COOKIE);
-    }
-    setUser(nextUser);
+    writeSession(token, nextUser);
   }, []);
 
   const logout = useCallback(() => {
@@ -62,16 +88,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback((token: string, nextUser: AuthUser) => persist(token, nextUser), [persist]);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (signal?: AbortSignal) => {
     const token = window.localStorage.getItem(TOKEN_KEY);
     if (!token) {
       persist(null, null);
       return;
     }
     try {
-      const { data } = await api.get<{ user: { _id: string; name: string; email: string; role: Role } }>('/auth/me');
+      const { data } = await api.get<{ user: { _id: string; name: string; email: string; role: Role } }>('/auth/me', {
+        signal,
+      });
+      if (signal?.aborted) return;
       persist(token, { id: data.user._id, name: data.user.name, email: data.user.email, role: data.user.role });
-    } catch {
+    } catch (err) {
+      if (isAbortError(err)) return;
       persist(null, null);
     }
   }, [persist]);
@@ -85,12 +115,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [persist, router]);
 
   useEffect(() => {
-    const stored = readStoredUser();
-    if (stored) setUser(stored);
-    refresh().finally(() => setLoading(false));
+    const controller = new AbortController();
+    void refresh(controller.signal).finally(() => {
+      if (!controller.signal.aborted) setSessionChecked(true);
+    });
+    return () => controller.abort();
   }, [refresh]);
 
-  const value = useMemo(() => ({ user, loading, login, logout, refresh }), [user, loading, login, logout, refresh]);
+  const loading = !user && !sessionChecked;
+  const refreshPublic = useCallback(async () => {
+    await refresh();
+  }, [refresh]);
+  const value = useMemo(
+    () => ({ user, loading, login, logout, refresh: refreshPublic }),
+    [user, loading, login, logout, refreshPublic],
+  );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

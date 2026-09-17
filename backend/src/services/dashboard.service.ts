@@ -1,6 +1,7 @@
 import { Loan } from '../models/Loan';
 import { User } from '../models/User';
 import { LOAN_STATUSES, type LoanStatus } from '../types';
+import { wallTime } from '../utils/requestTiming';
 
 export interface SalesLead {
   _id: string;
@@ -19,34 +20,37 @@ export interface SalesLead {
 }
 
 export async function listSalesLeads(): Promise<SalesLead[]> {
-  return User.aggregate<SalesLead>([
-    { $match: { role: 'borrower' } },
-    {
-      $lookup: {
-        from: 'loans',
-        localField: '_id',
-        foreignField: 'borrower',
-        pipeline: [{ $project: { _id: 1 } }, { $limit: 1 }],
-        as: 'loans',
+  return wallTime(
+    'salesLeads',
+    User.aggregate<SalesLead>([
+      { $match: { role: 'borrower' } },
+      {
+        $lookup: {
+          from: 'loans',
+          localField: '_id',
+          foreignField: 'borrower',
+          pipeline: [{ $project: { _id: 1 } }, { $limit: 1 }],
+          as: 'loans',
+        },
       },
-    },
-    { $match: { loans: { $size: 0 } } },
-    {
-      $project: {
-        name: 1,
-        email: 1,
-        createdAt: 1,
-        'profile.fullName': 1,
-        'profile.pan': 1,
-        'profile.monthlySalary': 1,
-        'profile.employmentMode': 1,
-        'profile.breStatus': 1,
-        'profile.breFailures': 1,
-        hasSalarySlip: { $cond: [{ $ifNull: ['$profile.salarySlip', false] }, true, false] },
+      { $match: { loans: { $size: 0 } } },
+      {
+        $project: {
+          name: 1,
+          email: 1,
+          createdAt: 1,
+          'profile.fullName': 1,
+          'profile.pan': 1,
+          'profile.monthlySalary': 1,
+          'profile.employmentMode': 1,
+          'profile.breStatus': 1,
+          'profile.breFailures': 1,
+          hasSalarySlip: { $cond: [{ $ifNull: ['$profile.salarySlip', false] }, true, false] },
+        },
       },
-    },
-    { $sort: { createdAt: -1 } },
-  ]);
+      { $sort: { createdAt: -1 } },
+    ]),
+  );
 }
 
 export interface DashboardSummary {
@@ -59,20 +63,26 @@ export interface DashboardSummary {
 }
 
 export async function getSummary(): Promise<DashboardSummary> {
-  const [statusCounts, totalBorrowers, leads, money] = await Promise.all([
-    Loan.aggregate<{ _id: LoanStatus; count: number }>([{ $group: { _id: '$status', count: { $sum: 1 } } }]),
-    User.countDocuments({ role: 'borrower' }),
-    Loan.distinct('borrower').then((ids) => User.countDocuments({ role: 'borrower', _id: { $nin: ids } })),
-    Loan.aggregate<{ disbursedPrincipal: number; outstanding: number }>([
-      { $match: { status: { $in: ['disbursed', 'closed'] } } },
-      {
-        $group: {
-          _id: null,
-          disbursedPrincipal: { $sum: '$principal' },
-          outstanding: { $sum: '$outstanding' },
+  const [statusCounts, totalBorrowers, borrowersWithLoans, money] = await Promise.all([
+    wallTime(
+      'statusCounts',
+      Loan.aggregate<{ _id: LoanStatus; count: number }>([{ $group: { _id: '$status', count: { $sum: 1 } } }]),
+    ),
+    wallTime('totalBorrowers', User.countDocuments({ role: 'borrower' })),
+    wallTime('borrowersWithLoans', Loan.distinct('borrower')),
+    wallTime(
+      'money',
+      Loan.aggregate<{ disbursedPrincipal: number; outstanding: number }>([
+        { $match: { status: { $in: ['disbursed', 'closed'] } } },
+        {
+          $group: {
+            _id: null,
+            disbursedPrincipal: { $sum: '$principal' },
+            outstanding: { $sum: '$outstanding' },
+          },
         },
-      },
-    ]),
+      ]),
+    ),
   ]);
 
   const loansByStatus = Object.fromEntries(LOAN_STATUSES.map((s) => [s, 0])) as Record<LoanStatus, number>;
@@ -82,7 +92,7 @@ export async function getSummary(): Promise<DashboardSummary> {
     loansByStatus,
     totalLoans: statusCounts.reduce((sum, row) => row.count + sum, 0),
     totalBorrowers,
-    leads,
+    leads: Math.max(0, totalBorrowers - borrowersWithLoans.length),
     disbursedPrincipal: money[0]?.disbursedPrincipal ?? 0,
     outstanding: money[0]?.outstanding ?? 0,
   };

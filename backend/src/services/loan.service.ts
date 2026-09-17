@@ -4,11 +4,14 @@ import { User, type ISalarySlip, type UserDocument } from '../models/User';
 import { ACTIVE_LOAN_STATUSES, type AuthUser, type LoanStatus, type Role } from '../types';
 import { AppError } from '../utils/AppError';
 import { calculateLoan } from '../utils/loanMath';
+import { wallTime } from '../utils/requestTiming';
 import type { LoanTermsInput } from '../validation/loan.schema';
 import * as borrowerService from './borrower.service';
 
 export const BORROWER_FIELDS =
   'name email role profile.fullName profile.pan profile.dob profile.monthlySalary profile.employmentMode profile.breStatus profile.breFailures profile.salarySlip';
+
+const LIST_BORROWER_FIELDS = 'name email profile.fullName';
 
 const TRANSITIONS: Record<LoanStatus, Partial<Record<LoanStatus, Role[]>>> = {
   applied: { sanctioned: ['sanction', 'admin'], rejected: ['sanction', 'admin'] },
@@ -96,10 +99,13 @@ export async function disburseLoan(loanId: string, actor: AuthUser): Promise<Loa
 }
 
 export async function listLoansByStatus(statuses: LoanStatus[]): Promise<LoanDocument[]> {
-  return Loan.find({ status: { $in: statuses } })
-    .select('-statusHistory -__v')
-    .populate('borrower', BORROWER_FIELDS)
-    .sort({ updatedAt: -1 });
+  return wallTime(
+    'listByStatus',
+    Loan.find({ status: { $in: statuses } })
+      .select('-statusHistory -__v')
+      .populate('borrower', LIST_BORROWER_FIELDS)
+      .sort({ updatedAt: -1 }),
+  );
 }
 
 export async function createLoan(borrower: AuthUser, terms: LoanTermsInput, known?: UserDocument): Promise<LoanDocument> {
@@ -128,8 +134,20 @@ export async function createLoan(borrower: AuthUser, terms: LoanTermsInput, know
   });
 }
 
+export async function assertCanAccessLoan(loanId: string, user: AuthUser): Promise<void> {
+  const loan = await Loan.findById(loanId).select('borrower').lean();
+  if (!loan) throw AppError.notFound('Loan not found');
+
+  if (user.role === 'borrower' && String(loan.borrower) !== user.id) {
+    throw AppError.forbidden('You can only view your own loans');
+  }
+  if (user.role === 'sales') {
+    throw AppError.forbidden('Sales cannot access loan records');
+  }
+}
+
 export async function listMyLoans(borrowerId: string): Promise<LoanDocument[]> {
-  return Loan.find({ borrower: borrowerId }).sort({ createdAt: -1 });
+  return Loan.find({ borrower: borrowerId }).select('-__v').sort({ createdAt: -1 });
 }
 
 export async function getLoanForUser(loanId: string, user: AuthUser): Promise<LoanDocument> {

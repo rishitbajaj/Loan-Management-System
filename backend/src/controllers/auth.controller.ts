@@ -1,9 +1,8 @@
 import type { Request, Response } from 'express';
-import { requireUser } from '../middleware/auth';
 import * as authService from '../services/auth.service';
-import { User } from '../models/User';
 import { AppError } from '../utils/AppError';
 import { sendCreated, sendSuccess } from '../utils/apiResponse';
+import { markPart } from '../utils/requestTiming';
 import { loginSchema, registerSchema } from '../validation/auth.schema';
 
 export async function register(req: Request, res: Response): Promise<void> {
@@ -19,7 +18,8 @@ export async function login(req: Request, res: Response): Promise<void> {
 }
 
 export async function me(req: Request, res: Response): Promise<void> {
-  const user = req.userDoc ?? (await User.findById(requireUser(req).id));
+  const user = req.userDoc;
   if (!user) throw AppError.notFound('User not found');
-  sendSuccess(res, { user });
+  markPart('userDoc=reused');
+  sendSuccess(res, { user: authService.toPublicUser(user) });
 }

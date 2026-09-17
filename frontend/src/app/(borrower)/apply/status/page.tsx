@@ -11,7 +11,7 @@ import { EmptyState, Surface } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { PageLoader } from '@/components/ui/Spinner';
 import { BORROWER_STATUS_LABELS, canReapply, showWhatHappensNext } from '@/lib/borrower-application';
-import { api, errorMessage } from '@/lib/api';
+import { api, errorMessage, isAbortError } from '@/lib/api';
 import { sectionLabelClass } from '@/lib/ui-classes';
 import type { Loan, Payment } from '@/lib/types';
 import { useRouter } from 'next/navigation';
@@ -34,24 +34,27 @@ export default function StatusPage() {
       setPayments([]);
       return;
     }
+    setPayError(null);
     let cancelled = false;
+    const controller = new AbortController();
     api
-      .get<{ payments: Payment[] }>(`/loans/${latestLoan._id}/payments`)
+      .get<{ payments: Payment[] }>(`/loans/${latestLoan._id}/payments`, { signal: controller.signal })
       .then(({ data }) => {
         if (!cancelled) setPayments(data.payments);
       })
       .catch((err) => {
-        if (!cancelled) setPayError(errorMessage(err));
+        if (!cancelled && !isAbortError(err)) setPayError(errorMessage(err));
       });
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, [latestLoan?._id, latestLoan?.status, latestLoan?.totalPaid]);
 
   async function handleRefresh() {
     setRefreshing(true);
     try {
-      await refresh();
+      await refresh({ fresh: true });
     } finally {
       setRefreshing(false);
     }

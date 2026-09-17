@@ -18,7 +18,7 @@ export async function record(req: Request, res: Response): Promise<void> {
 export async function list(req: Request, res: Response): Promise<void> {
   const user = requireUser(req);
   const { id } = loanIdSchema.parse(req.params);
-  await loanService.getLoanForUser(id, user);
+  await loanService.assertCanAccessLoan(id, user);
   const payments = await paymentService.listPayments(id);
   sendSuccess(res, { payments });
 }

@@ -4,7 +4,7 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { BreBadge, StatusBadge } from '@/components/StatusBadge';
 import { BorrowerLoanTimeline } from '@/components/borrower/BorrowerLoanTimeline';
-import { SalarySlipInlinePreview } from '@/components/borrower/SalarySlipPreviewModal';
+import { SalarySlipDocumentRow } from '@/components/borrower/SalarySlipPreviewModal';
 import { SanctionLoanActions } from '@/components/dashboard/SanctionLoanActions';
 import { sectionLabelClass, Surface } from '@/components/ui/Card';
 import { employmentLabel, incomeProofDescription, requiresIncomeProof } from '@/lib/employment-labels';
@@ -127,7 +127,7 @@ export function ApplicationDetailView({
               <div className="mt-4 border-t border-[var(--border-light)] pt-4">
                 <p className={sectionLabelClass}>Salary slip</p>
                 <div className="mt-3">
-                  <SalarySlipInlinePreview slip={slip} endpoint={`/loans/${loan._id}/salary-slip`} />
+                  <SalarySlipDocumentRow slip={slip} endpoint={`/loans/${loan._id}/salary-slip`} />
                 </div>
               </div>
             ) : (

@@ -5,12 +5,13 @@ import { UserAvatar } from '@/components/UserAvatar';
 import { BreBadge, StatusBadge, UploadBadge } from '@/components/StatusBadge';
 import { Alert, Card, Surface } from '@/components/ui/Card';
 import { PageLoader } from '@/components/ui/Spinner';
-import { api, errorMessage } from '@/lib/api';
+import { api, errorMessage, isAbortError, peekCachedGet } from '@/lib/api';
 import { formatCurrency, formatDate, formatDateTime } from '@/lib/format';
 import { BORROWER_STATUS_LABELS } from '@/lib/borrower-application';
 import { formatRoleLabel, homeFor, isExecutive, modulesForRole } from '@/lib/rbac';
 import { sectionLabelClass } from '@/lib/ui-classes';
 import type { EmploymentMode, Loan, UserDetail } from '@/lib/types';
+import { useAuth } from '@/lib/auth';
 import Link from 'next/link';
 import { useEffect, useState, type ReactNode } from 'react';
 
@@ -30,37 +31,39 @@ function ProfileRow({ label, value }: { label: string; value: ReactNode }) {
 }
 
 export function MyProfilePage() {
-  const [user, setUser] = useState<UserDetail | null>(null);
-  const [loans, setLoans] = useState<Loan[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { user: authUser } = useAuth();
+  const cachedMe = peekCachedGet<{ user: UserDetail }>('/auth/me');
+  const cachedLoans = peekCachedGet<{ loans: Loan[] }>('/loans/me');
+  const [user, setUser] = useState<UserDetail | null>(cachedMe?.data.user ?? null);
+  const [loans, setLoans] = useState<Loan[]>(cachedLoans?.data.loans ?? []);
+  const [loading, setLoading] = useState(!cachedMe);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    let cancelled = false;
+    const controller = new AbortController();
     async function load() {
-      setLoading(true);
       try {
-        const meRes = await api.get<{ user: UserDetail }>('/auth/me');
-        if (cancelled) return;
+        const isBorrower = authUser?.role === 'borrower';
+        const [meRes, loansRes] = await Promise.all([
+          api.get<{ user: UserDetail }>('/auth/me', { signal: controller.signal }),
+          isBorrower
+            ? api.get<{ loans: Loan[] }>('/loans/me', { signal: controller.signal })
+            : Promise.resolve(null),
+        ]);
+        if (controller.signal.aborted) return;
         setUser(meRes.data.user);
-        if (meRes.data.user.role === 'borrower') {
-          const loansRes = await api.get<{ loans: Loan[] }>('/loans/me');
-          if (!cancelled) setLoans(loansRes.data.loans);
-        } else {
-          setLoans([]);
-        }
+        setLoans(loansRes?.data.loans ?? []);
         setError(null);
       } catch (err) {
-        if (!cancelled) setError(errorMessage(err));
+        if (isAbortError(err) || controller.signal.aborted) return;
+        setError(errorMessage(err));
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!controller.signal.aborted) setLoading(false);
       }
     }
     void load();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    return () => controller.abort();
+  }, [authUser?.role]);
 
   if (loading) return <PageLoader />;
   if (error || !user) {

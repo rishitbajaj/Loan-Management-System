@@ -19,7 +19,7 @@ import { borrowerEmailClass, borrowerNameClass } from '@/lib/ui-classes';
 import type { SalesLead } from '@/lib/types';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { useMemo } from 'react';
+import { Suspense, useMemo } from 'react';
 
 function borrowerName(lead: SalesLead) {
   return lead.profile?.fullName || lead.name;
@@ -126,6 +126,14 @@ function FilterBanner({ filter, count }: { filter: SalesLeadFilter; count: numbe
 }
 
 export default function SalesPage() {
+  return (
+    <Suspense fallback={<PageLoader />}>
+      <SalesPageContent />
+    </Suspense>
+  );
+}
+
+function SalesPageContent() {
   const searchParams = useSearchParams();
   const filter = parseSalesLeadFilter(searchParams.get('filter'));
   const { data, error, loading, refresh } = useDashboardQuery<{ leads: SalesLead[] }>('/dashboard/sales/leads');

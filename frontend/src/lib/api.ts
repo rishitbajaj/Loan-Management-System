@@ -24,15 +24,7 @@ export interface ApiResult<T> {
   message?: string;
 }
 
-function requiredApiUrl(): string {
-  const url = process.env.NEXT_PUBLIC_API_URL ?? (process.env.NODE_ENV === 'production' ? undefined : 'http://localhost:5000/api');
-  if (!url) {
-    throw new Error('NEXT_PUBLIC_API_URL is required in production');
-  }
-  return url;
-}
-
-export const API_URL = requiredApiUrl();
+export const API_URL = '/api';
 export const TOKEN_KEY = 'lms_token';
 export const USER_KEY = 'lms_user';
 
@@ -47,6 +39,8 @@ interface RequestOptions {
   method?: Method;
   body?: unknown;
   formData?: FormData;
+  fresh?: boolean;
+  signal?: AbortSignal;
 }
 
 let onUnauthorized: (() => void) | null = null;
@@ -55,11 +49,26 @@ export function setUnauthorizedHandler(handler: (() => void) | null): void {
 }
 
 const inflightGets = new Map<string, Promise<ApiResult<unknown>>>();
-let meCache: { token: string; result: ApiResult<unknown>; expires: number } | null = null;
-const ME_CACHE_MS = 2500;
+const getCache = new Map<string, ApiResult<unknown>>();
+
+function cacheKey(path: string): string {
+  return `${getToken() ?? ''}:${path}`;
+}
 
 function clearVolatileCache(): void {
-  meCache = null;
+  getCache.clear();
+}
+
+export function clearApiCache(): void {
+  clearVolatileCache();
+}
+
+export function peekCachedGet<T>(path: string): ApiResult<T> | null {
+  return (getCache.get(cacheKey(path)) as ApiResult<T> | undefined) ?? null;
+}
+
+export function isAbortError(err: unknown): boolean {
+  return (err instanceof DOMException || err instanceof Error) && err.name === 'AbortError';
 }
 
 async function executeRequest<T>(path: string, options: RequestOptions = {}): Promise<ApiResult<T>> {
@@ -77,8 +86,14 @@ async function executeRequest<T>(path: string, options: RequestOptions = {}): Pr
 
   let response: Response;
   try {
-    response = await fetch(`${API_URL}${path}`, { method: options.method ?? 'GET', headers, body });
-  } catch {
+    response = await fetch(`${API_URL}${path}`, {
+      method: options.method ?? 'GET',
+      headers,
+      body,
+      signal: options.signal,
+    });
+  } catch (err) {
+    if (isAbortError(err)) throw err;
     throw new ApiError(0, 'Cannot reach the server. Is the backend running?');
   }
 
@@ -105,19 +120,16 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<A
   if (method !== 'GET') clearVolatileCache();
 
   if (method === 'GET' && !options.body && !options.formData) {
-    const token = getToken() ?? '';
-    if (path === '/auth/me' && meCache && meCache.token === token && meCache.expires > Date.now()) {
-      return meCache.result as ApiResult<T>;
+    const key = cacheKey(path);
+    if (!options.fresh) {
+      const cached = getCache.get(key);
+      if (cached) return cached as ApiResult<T>;
     }
-
-    const key = `${token}:${path}`;
     const existing = inflightGets.get(key);
     if (existing) return existing as Promise<ApiResult<T>>;
 
     const pending = executeRequest<T>(path, options).then((result) => {
-      if (path === '/auth/me') {
-        meCache = { token, result, expires: Date.now() + ME_CACHE_MS };
-      }
+      getCache.set(key, result);
       return result;
     });
     inflightGets.set(key, pending as Promise<ApiResult<unknown>>);
@@ -129,23 +141,31 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<A
 }
 
 export const api = {
-  get: <T>(path: string) => request<T>(path),
+  get: <T>(path: string, opts?: { fresh?: boolean; signal?: AbortSignal }) =>
+    request<T>(path, { fresh: opts?.fresh, signal: opts?.signal }),
   post: <T>(path: string, body?: unknown) => request<T>(path, { method: 'POST', body }),
   put: <T>(path: string, body?: unknown) => request<T>(path, { method: 'PUT', body }),
   patch: <T>(path: string, body?: unknown) => request<T>(path, { method: 'PATCH', body }),
   upload: <T>(path: string, formData: FormData) => request<T>(path, { method: 'POST', formData }),
 };
 
-export async function fetchBlob(path: string): Promise<Blob> {
+export async function fetchBlob(path: string, signal?: AbortSignal): Promise<Blob> {
   const token = getToken();
-  const response = await fetch(`${API_URL}${path}`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-  });
-  if (!response.ok) {
-    const payload = (await response.json().catch(() => null)) as { message?: string } | null;
-    throw new ApiError(response.status, payload?.message ?? 'Could not download file');
+  try {
+    const response = await fetch(`${API_URL}${path}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      signal,
+    });
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+      throw new ApiError(response.status, payload?.message ?? 'Could not download file');
+    }
+    return response.blob();
+  } catch (err) {
+    if (isAbortError(err)) throw err;
+    if (err instanceof ApiError) throw err;
+    throw new ApiError(0, 'Cannot reach the server. Is the backend running?');
   }
-  return response.blob();
 }
 
 export function errorMessage(err: unknown): string {

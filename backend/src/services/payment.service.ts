@@ -55,5 +55,5 @@ export async function recordPayment(loanId: string, actor: AuthUser, input: Paym
 }
 
 export async function listPayments(loanId: string): Promise<PaymentDocument[]> {
-  return Payment.find({ loan: loanId }).populate('recordedBy', 'name email role').sort({ paidOn: -1, createdAt: -1 });
+  return Payment.find({ loan: loanId }).select('loan utr amount paidOn createdAt').sort({ paidOn: -1, createdAt: -1 });
 }

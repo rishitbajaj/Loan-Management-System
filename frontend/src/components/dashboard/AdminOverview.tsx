@@ -5,7 +5,7 @@ import { LoanPipeline } from '@/components/dashboard/LoanPipeline';
 import { StatusBadge } from '@/components/StatusBadge';
 import { Alert, PageHeader, sectionLabelClass, StatCard, Surface } from '@/components/ui/Card';
 import { PageLoader } from '@/components/ui/Spinner';
-import { api, errorMessage } from '@/lib/api';
+import { api, errorMessage, isAbortError, peekCachedGet } from '@/lib/api';
 import { formatCurrency } from '@/lib/format';
 import type { DashboardSummary, LoanStatus } from '@/lib/types';
 import { useEffect, useState } from 'react';
@@ -21,14 +21,24 @@ const QUEUES: (
 ];
 
 export function AdminOverview() {
-  const [summary, setSummary] = useState<DashboardSummary | null>(null);
+  const cached = peekCachedGet<DashboardSummary>('/dashboard/summary');
+  const [summary, setSummary] = useState<DashboardSummary | null>(cached?.data ?? null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    const controller = new AbortController();
+    const hit = peekCachedGet<DashboardSummary>('/dashboard/summary');
+    if (hit) setSummary(hit.data);
     api
-      .get<DashboardSummary>('/dashboard/summary')
-      .then(({ data }) => setSummary(data))
-      .catch((err) => setError(errorMessage(err)));
+      .get<DashboardSummary>('/dashboard/summary', { fresh: true, signal: controller.signal })
+      .then(({ data }) => {
+        if (!controller.signal.aborted) setSummary(data);
+      })
+      .catch((err) => {
+        if (isAbortError(err) || controller.signal.aborted) return;
+        setError(errorMessage(err));
+      });
+    return () => controller.abort();
   }, []);
 
   const metrics = summary

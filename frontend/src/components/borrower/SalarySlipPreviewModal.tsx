@@ -3,7 +3,7 @@
 import { Modal } from '@/components/ui/Modal';
 import { PageLoader } from '@/components/ui/Spinner';
 import { Alert } from '@/components/ui/Card';
-import { errorMessage, fetchBlob } from '@/lib/api';
+import { errorMessage, fetchBlob, isAbortError } from '@/lib/api';
 import { formatBytes } from '@/lib/format';
 import type { SalarySlipMeta } from '@/lib/types';
 import { useEffect, useState } from 'react';
@@ -19,12 +19,13 @@ function useSalarySlipUrl(endpoint: string, enabled: boolean, slip: SalarySlipMe
     if (!enabled) return;
     let revoked = false;
     let url: string | null = null;
+    const controller = new AbortController();
 
     setLoading(true);
     setError(null);
     setPreviewUrl(null);
 
-    fetchBlob(endpoint)
+    fetchBlob(endpoint, controller.signal)
       .then((blob) => {
         if (revoked) return;
         const typed = new Blob([blob], { type: slip.mimeType || blob.type || 'application/pdf' });
@@ -32,7 +33,7 @@ function useSalarySlipUrl(endpoint: string, enabled: boolean, slip: SalarySlipMe
         setPreviewUrl(url);
       })
       .catch((err) => {
-        if (!revoked) setError(errorMessage(err));
+        if (!revoked && !isAbortError(err)) setError(errorMessage(err));
       })
       .finally(() => {
         if (!revoked) setLoading(false);
@@ -40,9 +41,10 @@ function useSalarySlipUrl(endpoint: string, enabled: boolean, slip: SalarySlipMe
 
     return () => {
       revoked = true;
+      controller.abort();
       if (url) URL.revokeObjectURL(url);
     };
-  }, [enabled, endpoint, slip.originalName, slip.uploadedAt]);
+  }, [enabled, endpoint, slip.originalName, slip.uploadedAt, slip.mimeType]);
 
   return { previewUrl, loading, error };
 }

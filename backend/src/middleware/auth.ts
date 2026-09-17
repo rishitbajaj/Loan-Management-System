@@ -3,6 +3,7 @@ import type { UserDocument } from '../models/User';
 import { User } from '../models/User';
 import { toAuthUser, verifyToken } from '../services/auth.service';
 import { AppError } from '../utils/AppError';
+import { recordPart } from '../utils/requestTiming';
 
 declare module 'express-serve-static-core' {
   interface Request {
@@ -16,8 +17,12 @@ export async function authenticate(req: Request, _res: Response, next: NextFunct
     throw AppError.unauthorized('Missing or malformed Authorization header');
   }
 
+  const jwtStarted = process.hrtime.bigint();
   const payload = verifyToken(header.slice('Bearer '.length).trim());
-  const user = await User.findById(payload.sub);
+  recordPart('jwt', Number(process.hrtime.bigint() - jwtStarted) / 1e6);
+
+  const projection = payload.role === 'borrower' ? 'name email role createdAt profile' : 'name email role createdAt';
+  const user = await User.findById(payload.sub).select(projection);
   if (!user) throw AppError.unauthorized('User no longer exists');
 
   req.userDoc = user;
