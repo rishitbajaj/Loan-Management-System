@@ -13,6 +13,11 @@ Admin can open every module. Everyone else only sees their own.
 
 The UI lives in `frontend/`. The API lives in `backend/`.
 
+Live:
+
+- App: https://loan-management-system-lac.vercel.app/
+- API: https://loan-management-system-9av6.onrender.com/api/health
+
 ## What you need
 
 - Node.js 24 or newer
@@ -34,13 +39,17 @@ cp frontend/.env.example frontend/.env.local
 
 In `backend/.env`, set `MONGODB_URI` and a long `JWT_SECRET` (at least 16 characters). The example file is already pointed at local Mongo on port 27017. If you are using Atlas, swap in the `mongodb+srv://...` URI and allow your IP.
 
-`frontend/.env.local` only needs:
+`CLIENT_URL` on the backend should match wherever Next is running, usually `http://localhost:3000`.
+
+The browser never talks to Express by hostname. It always calls same-origin `/api/...` (so `http://localhost:3000/api/health` locally, or `https://loan-management-system-lac.vercel.app/api/health` in production). Next.js rewrites those requests to the Express server.
+
+`frontend/.env.local` tells Next where to send that rewrite:
 
 ```
 NEXT_PUBLIC_API_URL=http://localhost:5000/api
 ```
 
-`CLIENT_URL` on the backend should match wherever Next is running, usually `http://localhost:3000`.
+You can omit it locally. In development Next already defaults to `http://localhost:5000/api`. Optional: set `BACKEND_URL` instead (with or without `/api`). In production one of those two must be set at **build** time, or the Next build fails on purpose.
 
 Create the demo accounts:
 
@@ -49,7 +58,7 @@ cd backend
 npm run seed
 ```
 
-You can run seed more than once. It upserts by email, so it will not duplicate users. Every seeded account uses the same password: `Password@123`
+You can run seed more than once. It upserts by email, so it will not duplicate users. If the database is empty when the API starts, it also seeds on its own. Every seeded account uses the same password: `Password@123`
 
 | Role | Email |
 | --- | --- |
@@ -72,7 +81,7 @@ cd backend && npm run dev
 cd frontend && npm run dev
 ```
 
-API health check: http://localhost:5000/api/health
+API health check: http://localhost:5000/api/health (or http://localhost:3000/api/health through Next)
 
 App: http://localhost:3000
 
@@ -238,7 +247,9 @@ Salary slips sit on the API server disk, so this is not set up for multiple mach
 
 The API goes on Render. The Next.js app goes on Vercel. MongoDB has to be Atlas (or any Mongo that Render can reach). Local Mongo on your laptop will not work from Render.
 
-If Render fails with `Could not read package.json` at `/opt/render/project/src/package.json`, the Root Directory is blank. Either leave it blank (this repo now has a root `package.json` that builds `backend/`) or set Root Directory to `backend`.
+The browser still only calls `/api` on the Vercel origin. Vercel rewrites `/api/:path*` to the Render API. That rewrite is baked in at **build** time from `NEXT_PUBLIC_API_URL` or `BACKEND_URL`. If neither is set, the production Next build throws instead of silently rewriting to localhost.
+
+If Render fails with `Could not read package.json` at `/opt/render/project/src/package.json`, Root Directory is blank. Either leave it blank (the root `package.json` builds `backend/`) or set Root Directory to `backend`.
 
 ### 1. MongoDB Atlas
 
@@ -247,7 +258,7 @@ Use an Atlas cluster. In Network Access, allow `0.0.0.0/0` so Render can connect
 ### 2. Render (backend)
 
 1. Go to https://dashboard.render.com and create a new Web Service from this GitHub repo.
-2. Root directory: `backend`
+2. Root directory: `backend` (or leave blank and use the root `package.json`)
 3. Build command: `npm install && npm run build`
 4. Start command: `npm start`
 5. Health check path: `/api/health`
@@ -259,19 +270,21 @@ Environment variables:
 | `NODE_ENV` | `production` |
 | `MONGODB_URI` | your Atlas URI |
 | `JWT_SECRET` | a long random string |
-| `CLIENT_URL` | your Vercel URL, for example `https://something.vercel.app` |
+| `CLIENT_URL` | `https://loan-management-system-lac.vercel.app` |
 | `JWT_EXPIRES_IN` | `1d` |
 | `UPLOAD_DIR` | `uploads` |
 
 Render sets `PORT` for you. Do not hardcode it.
 
-After the first successful deploy, open the Render shell and seed the demo accounts:
+`CLIENT_URL` is still the CORS allowlist for anything that hits Render directly. Same-origin calls from the Next app do not need CORS. Preview URLs on `*.vercel.app` are already allowed.
+
+If the Atlas database is empty on first boot, the API seeds demo accounts by itself. You can still seed from the Render shell:
 
 ```bash
 node dist/scripts/seed.js
 ```
 
-The public API URL will look like `https://lms-api.onrender.com`. Health check: `https://lms-api.onrender.com/api/health`
+This deploy’s API is `https://loan-management-system-9av6.onrender.com`. Health check: https://loan-management-system-9av6.onrender.com/api/health
 
 Note: salary slips are stored on disk. On the free Render plan that disk is wiped when the instance restarts, so uploaded files can disappear after sleep or redeploy. Seed data can be recreated by running seed again.
 
@@ -281,27 +294,25 @@ Note: salary slips are stored on disk. On the free Render plan that disk is wipe
 2. Root directory: `frontend`
 3. Framework: Next.js (it should detect this)
 
-Environment variable:
+Environment variable (must exist at **build** time, not only at runtime):
 
 | Key | Value |
 | --- | --- |
-| `NEXT_PUBLIC_API_URL` | `https://YOUR-RENDER-SERVICE.onrender.com/api` |
+| `NEXT_PUBLIC_API_URL` | `https://loan-management-system-9av6.onrender.com/api` |
 
-Deploy. Copy the Vercel URL, put it in Render as `CLIENT_URL`, and redeploy the API if you had a placeholder there.
+Use `https://loan-management-system-9av6.onrender.com/api`. Never `localhost`. After you change this value, trigger a new Vercel build so the rewrite destination updates.
 
-If you add a custom domain later, add that origin to `CLIENT_URL` as well. You can pass more than one, comma separated:
+Optional: `BACKEND_URL` instead of `NEXT_PUBLIC_API_URL` (with or without `/api`). Next normalizes it.
 
-```
-CLIENT_URL=https://your-app.vercel.app,https://www.your-domain.com
-```
+Do not put secrets in `NEXT_PUBLIC_*`. This value is only the public API origin.
 
-Preview URLs on `*.vercel.app` are already allowed by the API.
+`CLIENT_URL` on Render is `https://loan-management-system-lac.vercel.app`.
 
 ### Order that actually works
 
 1. Create the Render service with `CLIENT_URL=http://localhost:3000` for a minute, just so it boots.
-2. Create the Vercel project pointing at the Render API URL.
-3. Update Render `CLIENT_URL` to the Vercel origin and save (that restarts the API).
-4. Seed from the Render shell.
+2. Create the Vercel project with `NEXT_PUBLIC_API_URL=https://loan-management-system-9av6.onrender.com/api` **before** the first production build.
+3. Set Render `CLIENT_URL` to `https://loan-management-system-lac.vercel.app` and save (that restarts the API).
+4. Seed only if the database was not empty and auto-seed did not run.
 
-Free Render services sleep after idle time. The first request after that can take 30 to 60 seconds.
+Free Render services sleep after idle time. A cold `/api/health` can take tens of seconds. Keep a scheduled GET against https://loan-management-system-9av6.onrender.com/api/health (every 10 minutes is enough) so the instance stays warm. That ping hits Render directly; it is not a frontend keep-alive.
